@@ -1,1 +1,119 @@
- 
+{
+  "$comment": "Paloma365 product catalog. Managed by the product team; the LLM only reads it. Impact numbers are conservative, sales-approved assumptions consumed by ROIEngine.",
+  "modules": [
+    {
+      "code": "DELIVERY",
+      "name": "Paloma365 Delivery",
+      "description": "Own-delivery management: courier dispatch, zones, live tracking and aggregator integrations.",
+      "features": [
+        "Courier dispatch board with live GPS tracking",
+        "Delivery zone and fee configuration",
+        "Glovo/Wolt/Yandex aggregator order ingestion",
+        "Customer SMS/push order status notifications"
+      ],
+      "limitations": [
+        "Requires at least one dedicated courier on staff",
+        "Aggregator commissions are not included in module pricing"
+      ],
+      "impact": {
+        "order_growth_pct": 12.0,
+        "avg_ticket_growth_pct": 0.0,
+        "retention_uplift_pct": 2.0
+      }
+    },
+    {
+      "code": "CRM_LOYALTY",
+      "name": "Paloma365 CRM & Loyalty",
+      "description": "Guest profiles, segmentation, cashback/bonus programs and campaign messaging.",
+      "features": [
+        "Unified guest profiles with visit history",
+        "Configurable cashback and bonus-point programs",
+        "RFM segmentation and campaign builder",
+        "Birthday and win-back automations"
+      ],
+      "limitations": [
+        "SMS campaign delivery is billed separately by the telecom provider"
+      ],
+      "impact": {
+        "order_growth_pct": 6.0,
+        "avg_ticket_growth_pct": 3.0,
+        "retention_uplift_pct": 8.0
+      }
+    },
+    {
+      "code": "KITCHEN_DISPLAY",
+      "name": "Paloma365 Kitchen Display",
+      "description": "Digital kitchen screens with ticket routing, station timers and cook-time analytics.",
+      "features": [
+        "Per-station ticket routing and bump bars",
+        "Preparation time targets with overdue alerts",
+        "Cook-time analytics by dish and daypart"
+      ],
+      "limitations": [
+        "Requires a wall-mounted display per kitchen station"
+      ],
+      "impact": {
+        "order_growth_pct": 4.0,
+        "avg_ticket_growth_pct": 0.0,
+        "retention_uplift_pct": 3.0
+      }
+    },
+    {
+      "code": "QR_MENU",
+      "name": "Paloma365 QR Menu",
+      "description": "Contactless table ordering with photo menus, modifiers and built-in upsell prompts.",
+      "features": [
+        "Photo-rich digital menu with instant updates",
+        "Guest self-ordering from the table",
+        "Automatic upsell and combo prompts",
+        "Multi-language menu support"
+      ],
+      "limitations": [
+        "Effect depends on menu photo quality provided by the restaurant"
+      ],
+      "impact": {
+        "order_growth_pct": 3.0,
+        "avg_ticket_growth_pct": 7.0,
+        "retention_uplift_pct": 0.0
+      }
+    },
+    {
+      "code": "INVENTORY",
+      "name": "Paloma365 Inventory",
+      "description": "Stock control, recipe costing, supplier orders and write-off tracking.",
+      "features": [
+        "Real-time stock levels with low-stock alerts",
+        "Recipe/tech-card costing",
+        "Supplier purchase orders and goods-in",
+        "Write-off and variance reports"
+      ],
+      "limitations": [
+        "Requires initial stock-take and recipe data entry"
+      ],
+      "impact": {
+        "order_growth_pct": 0.0,
+        "avg_ticket_growth_pct": 2.0,
+        "retention_uplift_pct": 0.0
+      }
+    },
+    {
+      "code": "ANALYTICS_PRO",
+      "name": "Paloma365 Analytics Pro",
+      "description": "Advanced dashboards: sales, labour, menu engineering and multi-location comparison.",
+      "features": [
+        "Menu engineering matrix (stars/dogs)",
+        "Labour cost vs revenue dashboards",
+        "Multi-location performance comparison",
+        "Scheduled email reports"
+      ],
+      "limitations": [
+        "Most valuable for owners of two or more locations"
+      ],
+      "impact": {
+        "order_growth_pct": 2.0,
+        "avg_ticket_growth_pct": 2.0,
+        "retention_uplift_pct": 0.0
+      }
+    }
+  ]
+}

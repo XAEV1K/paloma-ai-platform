@@ -1,1 +1,15 @@
- 
+# Orchestration
+crewai>=1.15,<2.0
+
+# Data contracts & configuration
+pydantic>=2.7,<3.0
+pydantic-settings>=2.4,<3.0
+
+# Data processing (Python works — the LLM doesn't)
+pandas>=2.2
+
+# Environment
+python-dotenv>=1.0
+
+# Development
+pytest>=8.0

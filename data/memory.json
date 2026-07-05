@@ -1,0 +1,23 @@
+{
+  "R-001": {
+    "restaurant_id": "R-001",
+    "analyses": [
+      {
+        "analyzed_at": "2026-01-12T10:30:00Z",
+        "headline": "Dine-in dependent venue with weak retention and no delivery presence.",
+        "problem_categories": ["LOW_RETENTION", "LOW_DELIVERY_SHARE"]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-9A1B2C3D",
+        "offered_at": "2026-01-14T09:00:00Z",
+        "module_codes": ["CRM_LOYALTY"],
+        "roi_pct": 96.0,
+        "outcome": "REJECTED",
+        "rejected_modules": ["CRM_LOYALTY"],
+        "outcome_comment": "Owner declined: loyalty budget frozen until end of Q2 2026."
+      }
+    ]
+  }
+}

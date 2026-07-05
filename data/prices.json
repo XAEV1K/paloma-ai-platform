@@ -1,1 +1,11 @@
- 
+{
+  "$comment": "Official Paloma365 price list (KZT). Single source of pricing truth: OfferService reads it, ValidatorEngine enforces it.",
+  "prices": [
+    { "code": "DELIVERY",        "setup_fee": 90000,  "monthly_fee": 25000, "currency": "KZT" },
+    { "code": "CRM_LOYALTY",     "setup_fee": 60000,  "monthly_fee": 20000, "currency": "KZT" },
+    { "code": "KITCHEN_DISPLAY", "setup_fee": 120000, "monthly_fee": 18000, "currency": "KZT" },
+    { "code": "QR_MENU",         "setup_fee": 30000,  "monthly_fee": 12000, "currency": "KZT" },
+    { "code": "INVENTORY",       "setup_fee": 45000,  "monthly_fee": 15000, "currency": "KZT" },
+    { "code": "ANALYTICS_PRO",   "setup_fee": 0,      "monthly_fee": 22000, "currency": "KZT" }
+  ]
+}

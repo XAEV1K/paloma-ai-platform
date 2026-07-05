@@ -1,5 +1,14 @@
+# Environments & secrets
 venv/
 .env
+
+# Python artifacts
 __pycache__/
-*.xlsx
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated output
 reports/
+*.xlsx
