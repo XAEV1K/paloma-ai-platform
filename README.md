@@ -2,7 +2,7 @@
 
 **Agentic decision-support platform for restaurant businesses, built on Paloma365 data.**
 
-`python 3.12+` · `crewai 1.x` · `pydantic v2` · **prompt version: v2** · provider-agnostic (OpenAI / Anthropic / Gemini / OpenRouter / Ollama)
+`python 3.12+` · `crewai 1.x` · `pydantic v2` · **prompt version: v3** · multi-model routing (OpenAI / Anthropic / Gemini / OpenRouter / Ollama)
 
 The platform analyses a restaurant's real performance metrics, diagnoses growth
 bottlenecks, selects the right Paloma365 product modules, computes the financial
@@ -210,7 +210,12 @@ paloma-ai-platform/
 Each agent gets a **least-privilege tool belt** — it can only see the tools its
 role requires, which reduces both prompt size and failure surface. Backstories
 are versioned files (`prompts/<agent>_v<N>.md`); the active version is the
-`PROMPT_VERSION` config value, currently **v2** (memory-aware).
+`PROMPT_VERSION` config value, currently **v3** (grounded benchmarks, explicit
+anti-fabrication rules, hard length limits). Contract enforcement is layered:
+tool inputs are re-validated by the tool base class, agent outputs must parse
+into `output_pydantic` contracts, and the pipeline verifies that a returned
+`OfferRef` points at an offer that actually exists — a fabricated reference
+fails the run with a clean `AgentContractError`, never a raw traceback.
 
 ## Tools
 
@@ -239,17 +244,48 @@ one file in `tools/` + one name in an agent's belt.
 | `USE_BUSINESS_MEMORY` | `true` | Engagement-history tool + run recording |
 | `USE_SQLITE` | `false` | SQLite metrics backend instead of CSV (roadmap) |
 
-## LLM Providers
+## Multi-Model Routing
 
-Set `LLM_PROVIDER` + the matching key in `.env` — no code changes:
+Different pipeline roles have different model requirements — pinning all
+agents to one model wastes either money or quality. The `LLMRouter`
+(`llm/routing.py`) maps each role to its own model via config:
 
-| Provider | Example `LLM_MODEL` | Credential |
-|---|---|---|
-| `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` |
-| `anthropic` | `claude-sonnet-5` | `ANTHROPIC_API_KEY` |
-| `gemini` | `gemini-2.0-flash` | `GEMINI_API_KEY` |
-| `openrouter` | `deepseek/deepseek-chat` | `OPENROUTER_API_KEY` |
-| `ollama` | `llama3` | none (local, `OLLAMA_BASE_URL`) |
+| Role | Env var | Why | Temperature |
+|---|---|---|---|
+| Architect | `MODEL_ARCHITECT` | The diagnosis *is* the product — strongest reasoner in budget | 0.2 |
+| Developer | `MODEL_DEVELOPER` | A tool-calling loop over structured data — fast, cheap, reliable | 0.1 |
+| Validator | `MODEL_VALIDATOR` | Relays one deterministic verdict — cheapest model available | 0.0 |
+
+Any role without an explicit model falls back to `LLM_MODEL`, so the
+platform runs single-model out of the box and becomes multi-model with
+three lines of config. Model ids are full LiteLLM paths; the vendor is
+resolved by prefix (`openrouter/`, `anthropic/`, `gemini/`, `ollama/`),
+unprefixed ids go to `LLM_PROVIDER`. LLM handles are built **lazily** —
+commands that never call a model (`--list-restaurants`, tests) never
+need a credential — and `validate()` checks every distinct vendor's key
+before the first agent runs. The resolved routing table is logged at
+startup.
+
+Recommended OpenRouter setup (one key, every frontier model):
+
+```env
+LLM_PROVIDER=openrouter
+LLM_MODEL=openrouter/openai/gpt-4o-mini
+MODEL_ARCHITECT=openrouter/anthropic/claude-sonnet-5
+MODEL_DEVELOPER=openrouter/openai/gpt-4o-mini
+MODEL_VALIDATOR=openrouter/google/gemini-2.5-flash
+OPENROUTER_API_KEY=sk-or-...
+```
+
+## Projection Economics
+
+The ROI engine refuses to produce slideware numbers. Raw uplift is
+discounted through three auditable levers that ship inside every
+projection (`RoiAssumptions`): **gross margin** (only profit counts,
+default 30%), **attribution** (only part of the uplift is credibly the
+modules' doing, default 60%) and a **linear adoption ramp** (default
+3 months). Combined module growth is capped at 25%. The validator
+additionally enforces a hard 500% ROI credibility bound.
 
 ## Data Flow
 

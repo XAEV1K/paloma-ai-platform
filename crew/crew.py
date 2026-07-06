@@ -17,13 +17,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+from pydantic import ValidationError
+
 from crewai import Crew, Process, Task
 
 from crewai.tools import BaseTool
 
 from config.settings import Settings
 from core.context import ExecutionContext, execution_scope
-from core.exceptions import ConfigurationError
+from core.exceptions import AgentContractError, ConfigurationError, OfferNotFoundError
 from core.logging import get_logger
 from crew.agents import AgentFactory
 from crew.tasks import TaskFactory
@@ -110,7 +112,16 @@ class PalomaPipeline:
 
         with execution_scope(context):
             crew = self._build_crew(context)
-            crew_output = crew.kickoff(inputs={"restaurant_id": restaurant_id})
+            try:
+                crew_output = crew.kickoff(inputs={"restaurant_id": restaurant_id})
+            except ValidationError as exc:
+                # An agent's final answer did not parse into its contract
+                # (e.g. an over-long field after a fabricated response).
+                raise AgentContractError(
+                    f"An agent's final answer violated its output contract "
+                    f"({exc.error_count()} validation error(s) for {exc.title}). "
+                    f"First error: {exc.errors()[0].get('msg', 'unknown')}"
+                ) from exc
 
         context.metrics.record_llm_usage(getattr(crew_output, "token_usage", None))
 
@@ -118,7 +129,16 @@ class PalomaPipeline:
         offer_ref = self._typed_output(crew_output.tasks_output[1], OfferRef)
 
         # The full offer never travelled through the LLM — fetch it from Python.
-        offer = self._offer_service.get_offer(offer_ref.offer_id)
+        # This is also the anti-fabrication guard: an OfferRef pointing at an
+        # offer that was never generated cannot pass this line.
+        try:
+            offer = self._offer_service.get_offer(offer_ref.offer_id)
+        except OfferNotFoundError as exc:
+            raise AgentContractError(
+                f"Developer returned OfferRef '{offer_ref.offer_id}', but no such "
+                f"offer exists in the repository — the reference was fabricated "
+                f"instead of being produced by the offer_generator tool."
+            ) from exc
         validation = self._resolve_validation(context, crew_output, offer)
 
         report_path = self._report_service.render(business_case, offer, validation)
@@ -276,7 +296,7 @@ class PalomaPipeline:
         """Extract the contract model from a CrewAI task output, fail loudly."""
         pydantic_payload = getattr(task_output, "pydantic", None)
         if not isinstance(pydantic_payload, model):
-            raise TypeError(
+            raise AgentContractError(
                 f"Pipeline contract violation: expected {model.__name__}, "
                 f"got {type(pydantic_payload).__name__}"
             )

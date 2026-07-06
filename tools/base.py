@@ -49,10 +49,19 @@ def registered_tools() -> dict[str, type["InstrumentedTool"]]:
 
 
 class InstrumentedTool(BaseTool):
-    """Base for all platform tools: timing, tracing and metrics built in.
+    """Base for all platform tools: validation, timing, tracing, metrics.
 
     Subclasses implement :meth:`_execute` (the actual behaviour);
-    ``_run`` is final and owns the instrumentation.
+    ``_run`` is final and owns two cross-cutting concerns:
+
+    1. **Input validation.** CrewAI passes LLM-supplied arguments as raw
+       parsed JSON — nested objects arrive as ``dict``s, not as the
+       ``args_schema`` models. We re-validate the kwargs through the
+       schema here, so every ``_execute`` receives fully typed Pydantic
+       instances (audit finding: an offer tool crashed three times on
+       ``'dict' object has no attribute 'module_code'`` without this).
+    2. **Instrumentation.** Each invocation is timed and recorded into
+       the current :class:`ExecutionContext` (metrics + trace span).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -63,6 +72,12 @@ class InstrumentedTool(BaseTool):
         started = time.monotonic()
         ok = False
         try:
+            if kwargs and self.args_schema is not None:
+                validated = self.args_schema.model_validate(kwargs)
+                kwargs = {
+                    field: getattr(validated, field)
+                    for field in type(validated).model_fields
+                }
             result = self._execute(*args, **kwargs)
             ok = True
             return result

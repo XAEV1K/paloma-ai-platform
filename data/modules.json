@@ -1,5 +1,5 @@
 {
-  "$comment": "Paloma365 product catalog. Managed by the product team; the LLM only reads it. Impact numbers are conservative, sales-approved assumptions consumed by ROIEngine.",
+  "$comment": "Paloma365 product catalog. Managed by the product team; the LLM only reads it. Impact numbers are conservative, sales-approved uplift assumptions consumed by ROIEngine (which additionally applies gross margin, attribution and ramp-up).",
   "modules": [
     {
       "code": "DELIVERY",
@@ -16,7 +16,7 @@
         "Aggregator commissions are not included in module pricing"
       ],
       "impact": {
-        "order_growth_pct": 12.0,
+        "order_growth_pct": 8.0,
         "avg_ticket_growth_pct": 0.0,
         "retention_uplift_pct": 2.0
       }
@@ -35,8 +35,8 @@
         "SMS campaign delivery is billed separately by the telecom provider"
       ],
       "impact": {
-        "order_growth_pct": 6.0,
-        "avg_ticket_growth_pct": 3.0,
+        "order_growth_pct": 4.0,
+        "avg_ticket_growth_pct": 2.0,
         "retention_uplift_pct": 8.0
       }
     },
@@ -53,7 +53,7 @@
         "Requires a wall-mounted display per kitchen station"
       ],
       "impact": {
-        "order_growth_pct": 4.0,
+        "order_growth_pct": 3.0,
         "avg_ticket_growth_pct": 0.0,
         "retention_uplift_pct": 3.0
       }
@@ -72,8 +72,8 @@
         "Effect depends on menu photo quality provided by the restaurant"
       ],
       "impact": {
-        "order_growth_pct": 3.0,
-        "avg_ticket_growth_pct": 7.0,
+        "order_growth_pct": 2.0,
+        "avg_ticket_growth_pct": 5.0,
         "retention_uplift_pct": 0.0
       }
     },
@@ -92,7 +92,7 @@
       ],
       "impact": {
         "order_growth_pct": 0.0,
-        "avg_ticket_growth_pct": 2.0,
+        "avg_ticket_growth_pct": 1.5,
         "retention_uplift_pct": 0.0
       }
     },
@@ -110,8 +110,8 @@
         "Most valuable for owners of two or more locations"
       ],
       "impact": {
-        "order_growth_pct": 2.0,
-        "avg_ticket_growth_pct": 2.0,
+        "order_growth_pct": 1.5,
+        "avg_ticket_growth_pct": 1.5,
         "retention_uplift_pct": 0.0
       }
     }

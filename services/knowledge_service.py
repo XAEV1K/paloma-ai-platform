@@ -21,18 +21,22 @@ logger = get_logger("services.knowledge")
 
 
 class KnowledgeService:
-    """Loads and serves the Paloma365 module catalog and price list."""
+    """Loads and serves the Paloma365 module catalog and price list.
+
+    The catalog is loaded **eagerly** at construction time: it is small,
+    it must be valid for the platform to run at all (fail fast), and
+    CrewAI executes tool calls in parallel threads — lazy initialisation
+    here caused a triple concurrent load in production logs.
+    """
 
     def __init__(self, modules_path: Path, prices_path: Path) -> None:
         self._modules_path = modules_path
         self._prices_path = prices_path
-        self._knowledge: KnowledgeBase | None = None
+        self._knowledge: KnowledgeBase = self._load()
 
     @property
     def knowledge_base(self) -> KnowledgeBase:
-        """The validated catalog aggregate (lazily loaded, then cached)."""
-        if self._knowledge is None:
-            self._knowledge = self._load()
+        """The validated, immutable catalog aggregate."""
         return self._knowledge
 
     def get_module(self, code: ModuleCode) -> PalomaModule:

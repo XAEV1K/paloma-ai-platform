@@ -5,7 +5,7 @@ text, they exchange instances of these schemas. Keep this package free of
 I/O and framework imports — pure Pydantic only.
 """
 
-from models.business_case import BusinessCase, BusinessProblem, DeveloperTask
+from models.business_case import BusinessCase, BusinessProblem
 from models.crm import CrmSnapshot
 from models.enums import (
     Currency,
@@ -22,6 +22,7 @@ from models.offer import (
     Offer,
     OfferLineItem,
     OfferRef,
+    RoiAssumptions,
     RoiProjection,
 )
 from models.restaurant import RestaurantMetrics
@@ -32,7 +33,6 @@ __all__ = [
     "BusinessProblem",
     "CrmSnapshot",
     "Currency",
-    "DeveloperTask",
     "KnowledgeBase",
     "ModuleCode",
     "ModulePrice",
@@ -47,6 +47,7 @@ __all__ = [
     "ProblemCategory",
     "RestaurantHistory",
     "RestaurantMetrics",
+    "RoiAssumptions",
     "RoiProjection",
     "Severity",
     "ValidationIssue",

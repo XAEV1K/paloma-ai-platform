@@ -23,13 +23,13 @@ from crew.agents import AgentFactory
 from crew.crew import PalomaPipeline
 from crew.prompts import PromptRepository
 from crew.tasks import TaskFactory
-from engines.recommendation_engine import RecommendationEngine
+from engines.recommendation_engine import RecommendationEngine, RecommendationThresholds
 from engines.roi_engine import ROIEngine
 from engines.validator_engine import ValidatorEngine
 from events.bus import InMemoryEventBus
 from events.events import DomainEvent
 from events.handlers import AuditLogHandler
-from llm.providers import BaseLLMProvider, create_provider
+from llm.routing import LLMRouter
 from services.crm_service import CrmService
 from services.knowledge_service import KnowledgeService
 from services.memory_service import BusinessMemoryService, JsonMemoryRepository
@@ -52,7 +52,7 @@ class Container:
     """Fully wired application object graph."""
 
     settings: Settings
-    llm_provider: BaseLLMProvider
+    llm_router: LLMRouter
     restaurant_service: RestaurantService
     knowledge_service: KnowledgeService
     offer_service: OfferService
@@ -89,8 +89,11 @@ class Container:
             memory_service = BusinessMemoryService(JsonMemoryRepository(settings.memory_json))
 
         # --- Deterministic engines ----------------------------------------
+        # One thresholds instance shared by the rule engine AND the analytics
+        # tool: the benchmarks agents quote are the thresholds rules fire on.
+        thresholds = RecommendationThresholds()
         roi_engine = ROIEngine()
-        recommendation_engine = RecommendationEngine()
+        recommendation_engine = RecommendationEngine(thresholds=thresholds)
         validator_engine = ValidatorEngine()
 
         offer_service = OfferService(
@@ -115,6 +118,7 @@ class Container:
             "roi_engine": roi_engine,
             "recommendation_engine": recommendation_engine,
             "validator_engine": validator_engine,
+            "thresholds": thresholds,
         }
         if memory_service is not None:
             dependencies["memory_service"] = memory_service
@@ -123,11 +127,14 @@ class Container:
         tools = registry.create_all(dependencies, optional=frozenset({"business_memory"}))
 
         # --- LLM & orchestration --------------------------------------------
-        llm_provider = create_provider(settings)
+        # The router resolves models per role and builds LLM handles lazily:
+        # commands that never call a model never need a credential.
+        llm_router = LLMRouter(settings)
+        logger.info("LLM routing table: %s", llm_router.describe())
         prompts = PromptRepository(settings.prompts_dir, settings.prompt_version)
         pipeline = PalomaPipeline(
             settings=settings,
-            agent_factory=AgentFactory(settings, llm=llm_provider.build(), prompts=prompts),
+            agent_factory=AgentFactory(settings, router=llm_router, prompts=prompts),
             task_factory=TaskFactory(),
             tools=tools,
             offer_service=offer_service,
@@ -141,7 +148,7 @@ class Container:
         logger.info("Container ready")
         return cls(
             settings=settings,
-            llm_provider=llm_provider,
+            llm_router=llm_router,
             restaurant_service=restaurant_service,
             knowledge_service=knowledge_service,
             offer_service=offer_service,

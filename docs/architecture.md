@@ -125,6 +125,7 @@ extension point.
 | New validation check | new `ValidationRule` strategy, register in `DEFAULT_RULES` | 1 class |
 | New Paloma365 module | add entries to `modules.json` / `prices.json` + `ModuleCode` | data + 1 enum |
 | New prompt iteration | add `prompts/<agent>_v<N+1>.md`, bump `PROMPT_VERSION` | 0 code |
+| Different model per agent | `.env`: `MODEL_ARCHITECT` / `MODEL_DEVELOPER` / `MODEL_VALIDATOR` | 0 code |
 | Different LLM provider | `.env`: `LLM_PROVIDER` + key (`llm/providers.py` registry) | 0 code |
 | PDF reports | new renderer in `ReportService` | 1 method |
 | REST API surface | FastAPI app reusing `Container` | additive |
@@ -146,7 +147,28 @@ extension point.
 - Source data is validated by Pydantic **at the boundary** (CSV row →
   `RestaurantMetrics`), so bad data fails fast with a precise message.
 
-## 9. Cost model
+## 9. Multi-model routing
+
+One model for all agents wastes either money or quality. Each role is
+routed independently (``llm/routing.py``):
+
+```
+Architect  ──►  strongest reasoner        (MODEL_ARCHITECT,  T=0.2)
+Developer  ──►  fast tool-caller          (MODEL_DEVELOPER,  T=0.1)
+Validator  ──►  cheapest relay            (MODEL_VALIDATOR,  T=0.0)
+                       │
+                       ▼
+        provider resolved by model-id prefix
+   (openrouter/ · anthropic/ · gemini/ · ollama/ · default)
+```
+
+LLM handles are built lazily (no credential needed until a model is
+actually called) and validated eagerly before the first agent runs.
+The economics of every projection are governed by ``RoiAssumptions``
+(gross margin, attribution, adoption ramp) so no agent — and no naive
+formula — can produce a 4945% ROI again.
+
+## 10. Cost model
 
 Token spend is bounded by design:
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,22 +31,47 @@ class Settings(BaseSettings):
         env_file=_PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        # We intentionally use MODEL_ARCHITECT / MODEL_DEVELOPER / MODEL_VALIDATOR
+        # env vars; disable pydantic's "model_" protected namespace for them.
+        protected_namespaces=(),
     )
 
-    # --- LLM -----------------------------------------------------------
+    # --- Application -----------------------------------------------------
+    app_name: str = Field(default="Paloma AI Decision Platform")
+    environment: Literal["development", "staging", "production"] = Field(
+        default="development"
+    )
+    debug: bool = Field(
+        default=False,
+        description="True forces DEBUG logging regardless of LOG_LEVEL.",
+    )
+
+    # --- LLM routing -------------------------------------------------------
     llm_provider: str = Field(
         default="openai",
-        description="Provider key: openai | anthropic | gemini | openrouter | ollama.",
+        description="Default vendor for model ids without a known prefix.",
     )
     llm_model: str = Field(
         default="gpt-4o-mini",
-        description="Model identifier; the provider adds its LiteLLM route prefix.",
+        description="Fallback model for any role without an explicit MODEL_<ROLE>.",
     )
-    llm_temperature: float = Field(
-        default=0.1,
+    # Per-role model assignments (full LiteLLM ids; with openrouter write the
+    # complete catalog path, e.g. 'openrouter/anthropic/claude-sonnet-5').
+    model_architect: str | None = Field(
+        default=None, description="Strong reasoning model for diagnosis."
+    )
+    model_developer: str | None = Field(
+        default=None, description="Fast, reliable tool-calling model."
+    )
+    model_validator: str | None = Field(
+        default=None,
+        description="Cheapest/fastest model — it only relays a machine verdict.",
+    )
+    llm_temperature: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="Low temperature: agents must reason, not improvise numbers.",
+        description="Global override; unset -> per-role defaults (0.2/0.1/0.0).",
     )
     # Credentials are all optional so offline tooling/tests still import;
     # the selected provider fails fast in validate() if its key is missing.
@@ -62,7 +88,7 @@ class Settings(BaseSettings):
 
     # --- Prompts ---------------------------------------------------------
     prompt_version: str = Field(
-        default="v2",
+        default="v3",
         description="Which prompts/<agent>_<version>.md files the agents load.",
     )
 

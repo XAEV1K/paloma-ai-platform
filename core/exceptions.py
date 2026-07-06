@@ -43,3 +43,13 @@ class OfferNotFoundError(PalomaError):
     def __init__(self, offer_id: str) -> None:
         super().__init__(f"Offer '{offer_id}' not found in offer repository")
         self.offer_id = offer_id
+
+
+class AgentContractError(PalomaError):
+    """Raised when an LLM agent's output violates a pipeline contract.
+
+    This is the firewall against hallucinated artifacts: a fabricated
+    offer id, an answer that does not parse into the stage's Pydantic
+    contract, or an unexpected payload type. The pipeline converts these
+    into a clean domain failure instead of a raw traceback.
+    """

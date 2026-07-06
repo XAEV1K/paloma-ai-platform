@@ -1,14 +1,21 @@
-"""LLM providers behind one abstract base.
+"""Credential/endpoint resolvers for LLM vendors.
 
-The rest of the platform never mentions a vendor: ``AgentFactory``
-receives a ready ``crewai.LLM`` built by whichever provider the operator
-selected via ``LLM_PROVIDER`` in ``.env``. Switching Claude ↔ GPT ↔
-Gemini ↔ OpenRouter ↔ local Ollama is a config change, zero code.
+A provider answers three questions about a model id:
+1. Is this model mine? (``model_prefix`` match)
+2. Which credential / base URL does it need?
+3. Is the configuration usable right now? (``validate`` — fail fast)
 
-Each provider knows three things:
-1. how to prefix the model id for LiteLLM routing,
-2. which credential it needs,
-3. how to fail fast (``validate``) when that credential is missing.
+Providers do NOT construct LLM handles — that is the router's job
+(:mod:`llm.routing`), and it happens lazily so that commands which never
+call a model (``--list-restaurants``, tests) never require a key.
+
+Resolution policy (explicit over clever):
+- A model id carrying a known prefix (``openrouter/``, ``anthropic/``,
+  ``gemini/``, ``ollama/``) is routed to that vendor as-is.
+- An unprefixed id is qualified by the *default* provider
+  (``LLM_PROVIDER``). With ``LLM_PROVIDER=openrouter`` always write full
+  catalog paths (``openrouter/openai/gpt-4o-mini``) — the platform will
+  not guess a vendor segment for you.
 """
 
 from __future__ import annotations
@@ -16,17 +23,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
-from crewai import LLM
-
 from config.settings import Settings
 from core.exceptions import ConfigurationError
-from core.logging import get_logger
-
-logger = get_logger("llm.providers")
 
 
 class BaseLLMProvider(ABC):
-    """Template for a vendor integration (Template Method pattern)."""
+    """Vendor integration: prefix routing + credentials + fail-fast checks."""
 
     #: Registry key used in ``LLM_PROVIDER``.
     name: ClassVar[str]
@@ -49,12 +51,11 @@ class BaseLLMProvider(ABC):
         return True
 
     # --- template ---------------------------------------------------------
-    def model_id(self) -> str:
-        """Fully-qualified LiteLLM model id."""
-        model = self._settings.llm_model
-        if self.model_prefix and not model.startswith(self.model_prefix):
-            return f"{self.model_prefix}{model}"
-        return model
+    def qualify(self, model_id: str) -> str:
+        """Return the fully-qualified LiteLLM model id for this vendor."""
+        if self.model_prefix and not model_id.startswith(self.model_prefix):
+            return f"{self.model_prefix}{model_id}"
+        return model_id
 
     def validate(self) -> None:
         """Fail fast, before any agent runs, if the provider is unusable."""
@@ -63,16 +64,6 @@ class BaseLLMProvider(ABC):
                 f"LLM provider '{self.name}' requires an API key. "
                 f"Set the appropriate variable in .env (see .env.example)."
             )
-
-    def build(self) -> LLM:
-        """Construct the CrewAI LLM handle for this provider."""
-        logger.info("LLM provider '%s' -> model '%s'", self.name, self.model_id())
-        return LLM(
-            model=self.model_id(),
-            temperature=self._settings.llm_temperature,
-            api_key=self.api_key(),
-            base_url=self.base_url(),
-        )
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -100,6 +91,8 @@ class GeminiProvider(BaseLLMProvider):
 
 
 class OpenRouterProvider(BaseLLMProvider):
+    """One credential, every frontier model — ideal for per-role routing."""
+
     name = "openrouter"
     model_prefix = "openrouter/"
 
@@ -138,12 +131,20 @@ _PROVIDERS: dict[str, type[BaseLLMProvider]] = {
 }
 
 
-def create_provider(settings: Settings) -> BaseLLMProvider:
-    """Resolve the configured provider or fail with the list of valid options."""
-    provider_cls = _PROVIDERS.get(settings.llm_provider.lower())
+def create_provider(settings: Settings, name: str | None = None) -> BaseLLMProvider:
+    """Resolve a provider by name (defaults to ``LLM_PROVIDER``)."""
+    key = (name or settings.llm_provider).lower()
+    provider_cls = _PROVIDERS.get(key)
     if provider_cls is None:
         raise ConfigurationError(
-            f"Unknown LLM provider '{settings.llm_provider}'. "
-            f"Valid options: {', '.join(sorted(_PROVIDERS))}."
+            f"Unknown LLM provider '{key}'. Valid options: {', '.join(sorted(_PROVIDERS))}."
         )
     return provider_cls(settings)
+
+
+def provider_for_model(model_id: str, settings: Settings) -> BaseLLMProvider:
+    """Route a model id to its vendor by prefix, else to the default provider."""
+    for provider_cls in _PROVIDERS.values():
+        if provider_cls.model_prefix and model_id.startswith(provider_cls.model_prefix):
+            return provider_cls(settings)
+    return create_provider(settings)

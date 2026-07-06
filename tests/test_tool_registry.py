@@ -7,7 +7,7 @@ import pytest
 from config.settings import Settings
 from core.context import ExecutionContext, execution_scope
 from core.exceptions import ConfigurationError
-from engines.recommendation_engine import RecommendationEngine
+from engines.recommendation_engine import RecommendationEngine, RecommendationThresholds
 from engines.roi_engine import ROIEngine
 from engines.validator_engine import ValidatorEngine
 from services.crm_service import CrmService
@@ -41,6 +41,7 @@ def _dependencies(settings: Settings, tmp_path) -> dict[str, object]:
         "roi_engine": roi_engine,
         "recommendation_engine": RecommendationEngine(),
         "validator_engine": ValidatorEngine(),
+        "thresholds": RecommendationThresholds(),
         "memory_service": BusinessMemoryService(JsonMemoryRepository(tmp_path / "memory.json")),
     }
 
@@ -56,6 +57,39 @@ def test_create_all_injects_dependencies(settings: Settings, tmp_path) -> None:
 
     result = tools["restaurant_analytics"].run(restaurant_id="R-001")
     assert '"restaurant_id": "R-001"' in result
+
+
+def test_analytics_includes_official_benchmarks(settings: Settings, tmp_path) -> None:
+    """The Architect must quote real thresholds, so the tool must serve them."""
+    tools = ToolRegistry().discover().create_all(_dependencies(settings, tmp_path))
+    result = tools["restaurant_analytics"].run(restaurant_id="R-001")
+    assert '"benchmarks"' in result
+    assert '"retention_rate_min": 0.25' in result
+
+
+def test_nested_dict_arguments_are_coerced(settings: Settings, tmp_path) -> None:
+    """CrewAI passes nested args as raw dicts; the base tool must re-validate.
+
+    Regression for the production failure:
+    ``'dict' object has no attribute 'module_code'`` (3 retries, then a
+    fabricated offer).
+    """
+    tools = ToolRegistry().discover().create_all(_dependencies(settings, tmp_path))
+
+    result = tools["offer_generator"].run(
+        restaurant_id="R-001",
+        modules=[
+            {
+                "module_code": "DELIVERY",
+                "addresses": "LOW_DELIVERY_SHARE",
+                "priority": 1,
+                "rationale": "Delivery share below benchmark.",
+            }
+        ],
+        executive_summary="Deterministic test summary.",
+    )
+
+    assert '"offer_id"' in result, f"offer_generator should succeed, got: {result}"
 
 
 def test_missing_dependency_fails_fast() -> None:

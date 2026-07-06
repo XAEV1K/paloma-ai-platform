@@ -13,14 +13,20 @@ the exact same ``Container``).
 
 from __future__ import annotations
 
-import argparse
-import sys
+# Runtime bootstrap MUST precede any CrewAI import (frameworks read their
+# environment at import time) — hence the unconventional import order.
+from core.bootstrap import configure_runtime
 
-from config.settings import get_settings
-from core.container import Container
-from core.exceptions import PalomaError
-from core.logging import configure_logging, get_logger
-from metrics.report import render_summary, render_timeline
+configure_runtime()
+
+import argparse  # noqa: E402
+import sys  # noqa: E402
+
+from config.settings import get_settings  # noqa: E402
+from core.container import Container  # noqa: E402
+from core.exceptions import PalomaError  # noqa: E402
+from core.logging import configure_logging, get_logger  # noqa: E402
+from metrics.report import render_summary, render_timeline  # noqa: E402
 
 logger = get_logger("main")
 
@@ -41,14 +47,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Windows consoles often default to a legacy codepage (cp1251/cp866);
-    # the timeline/summary boxes are UTF-8, so upgrade stdout defensively.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
     args = _parse_args(argv)
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging("DEBUG" if settings.debug else settings.log_level)
 
     try:
         container = Container.build(settings)
@@ -58,7 +59,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(restaurant_id)
             return 0
 
-        container.llm_provider.validate()  # fail fast before any agent runs
+        # Fail fast on credentials for every model in the routing table —
+        # before the first agent runs, not in the middle of a demo.
+        container.llm_router.validate()
 
         result = container.pipeline.run(args.restaurant_id)
 

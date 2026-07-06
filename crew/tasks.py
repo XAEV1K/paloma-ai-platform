@@ -34,10 +34,19 @@ class TaskFactory:
         return Task(
             description=(
                 "Analyse restaurant '{restaurant_id}'. Use your tools to gather "
-                "evidence (metrics, CRM signals, engagement history), then diagnose "
-                "the business problems and rank them by impact. Output a BusinessCase."
+                "evidence (metrics + official benchmarks, CRM signals, engagement "
+                "history), then diagnose the business problems and rank them by "
+                "impact. Benchmarks MUST be the values from the 'benchmarks' block "
+                "of restaurant_analytics — never invented."
             ),
-            expected_output="A valid BusinessCase JSON object with evidence-backed problems.",
+            expected_output=(
+                "Raw JSON only (no markdown fences): "
+                '{"restaurant_id": str, "headline": str (max 200 chars), '
+                '"problems": [1-5 items: {"category", "severity", "metric_name", '
+                '"metric_value", "benchmark", "summary" (max 300 chars)}], '
+                '"growth_opportunities": [max 3 short strings], '
+                '"priority_order": [problem categories, highest impact first]}'
+            ),
             agent=agent,
             output_pydantic=BusinessCase,
             callback=callback,
@@ -55,7 +64,13 @@ class TaskFactory:
                 "base, compute the bundle's ROI, then create the offer with the "
                 "offer_generator tool. Return only the OfferRef the tool gives you."
             ),
-            expected_output="A valid OfferRef JSON object (offer_id, modules, headline).",
+            expected_output=(
+                "Raw JSON only (no markdown fences): the EXACT OfferRef returned by "
+                'the offer_generator tool: {"offer_id": str, "restaurant_id": str, '
+                '"module_codes": [codes], "headline": str (max 200 chars)}. '
+                "Never fabricate an offer_id — if offer_generator failed, fix the "
+                "input and call it again."
+            ),
             agent=agent,
             context=context,
             output_pydantic=OfferRef,
@@ -72,7 +87,10 @@ class TaskFactory:
                 "the offer_validation tool. Relay the machine-generated report "
                 "verbatim as your final answer."
             ),
-            expected_output="A valid ValidationReport JSON object.",
+            expected_output=(
+                "Raw JSON only (no markdown fences): the EXACT ValidationReport "
+                "returned by the offer_validation tool, verbatim and unmodified."
+            ),
             agent=agent,
             context=context,
             output_pydantic=ValidationReport,

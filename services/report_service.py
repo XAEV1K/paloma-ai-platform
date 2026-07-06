@@ -93,10 +93,13 @@ class ReportService:
 ## Financial Projection ({offer.roi.horizon_months} months)
 
 - **Projected revenue growth:** {offer.roi.revenue_increase_pct:.1f}% / month
-- **Projected monthly gain:** {offer.roi.monthly_gain:,.0f}
+- **Projected monthly profit gain (steady state):** {offer.roi.monthly_gain:,.0f}
 - **Total investment:** {offer.roi.total_investment:,.0f}
 - **ROI:** {offer.roi.roi_pct:.1f}%
 - **Payback:** {payback}
+- **Assumptions:** {offer.roi.assumptions.gross_margin_pct:.0%} gross margin, \
+{offer.roi.assumptions.attribution_pct:.0%} attribution, \
+{offer.roi.assumptions.ramp_up_months}-month adoption ramp
 
 ## Executive Summary
 

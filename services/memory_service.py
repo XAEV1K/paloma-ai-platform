@@ -8,6 +8,7 @@ real database when history becomes multi-tenant.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -97,7 +98,7 @@ class BusinessMemoryService:
         history = self.get_history(offer.restaurant_id)
         history.analyses.append(
             PastAnalysis(
-                analyzed_at=business_case.created_at,
+                analyzed_at=datetime.now(timezone.utc),  # time is Python's job, not the LLM's
                 headline=business_case.headline,
                 problem_categories=[p.category for p in business_case.problems],
             )

@@ -25,6 +25,31 @@ class ModuleRecommendation(BaseModel):
     rationale: str = Field(max_length=300, description="Deterministic rule explanation.")
 
 
+class RoiAssumptions(BaseModel):
+    """The conservative levers behind every projection — shown, not hidden.
+
+    A credible sales projection never claims 100% of incremental revenue
+    as pure benefit. These assumptions turn raw uplift into a defensible
+    profit figure, and they travel with the projection so any reviewer
+    can audit the math.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    gross_margin_pct: float = Field(
+        default=0.30, gt=0, le=1,
+        description="Share of incremental revenue that becomes gross profit.",
+    )
+    attribution_pct: float = Field(
+        default=0.60, gt=0, le=1,
+        description="Share of the uplift credibly attributable to the modules.",
+    )
+    ramp_up_months: int = Field(
+        default=3, ge=0,
+        description="Months until the modules reach full effect (linear ramp).",
+    )
+
+
 class RoiProjection(BaseModel):
     """Deterministic financial projection computed by ``ROIEngine``.
 
@@ -36,13 +61,16 @@ class RoiProjection(BaseModel):
 
     horizon_months: int = Field(ge=1)
     total_investment: float = Field(ge=0, description="Setup + subscription over horizon.")
-    monthly_gain: float = Field(description="Projected incremental revenue per month.")
+    monthly_gain: float = Field(
+        description="Steady-state attributed monthly PROFIT gain (post-ramp)."
+    )
     revenue_increase_pct: float = Field(description="Projected monthly revenue growth, %.")
     roi_pct: float = Field(description="((gain - investment) / investment) * 100 over horizon.")
     payback_months: float | None = Field(
         default=None,
         description="None when monthly gain is non-positive (no payback).",
     )
+    assumptions: RoiAssumptions = Field(default_factory=RoiAssumptions)
 
 
 class OfferLineItem(BaseModel):
