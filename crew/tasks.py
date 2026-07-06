@@ -46,7 +46,13 @@ class TaskFactory:
                 '"problems": [1-5 items: {"category", "severity", "metric_name", '
                 '"metric_value", "benchmark", "summary" (max 300 chars)}], '
                 '"growth_opportunities": [max 3 short strings], '
-                '"priority_order": [problem categories, highest impact first]}'
+                '"priority_order": [problem categories, highest impact first]}. '
+                "category MUST be one of: LOW_DELIVERY_SHARE, LOW_RETENTION, "
+                "SLOW_KITCHEN, SLOW_DELIVERY, LOW_AVG_TICKET, KITCHEN_OVERLOAD, "
+                "STOCK_LOSSES — no other category values exist. "
+                "severity MUST be one of: LOW, MEDIUM, HIGH, CRITICAL. "
+                "A finding that fits no category goes into growth_opportunities "
+                "as text, never into problems."
             ),
             agent=agent,
             callback=callback,

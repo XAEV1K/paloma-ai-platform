@@ -163,6 +163,14 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("Pipeline aborted: %s", exc)
         _print_failure(str(exc))
         return 1
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        return 130
+    except Exception as exc:  # noqa: BLE001 — the user must never see a traceback
+        logger.error("Unexpected failure: %s: %s", type(exc).__name__, exc)
+        logger.debug("Full traceback follows", exc_info=True)  # visible with --verbose
+        _print_failure(f"Unexpected {type(exc).__name__}: {str(exc)[:200]}")
+        return 1
 
 
 if __name__ == "__main__":

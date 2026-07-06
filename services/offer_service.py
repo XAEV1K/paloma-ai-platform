@@ -32,6 +32,14 @@ class OfferRepository(Protocol):
         """Return the offer or raise ``OfferNotFoundError``."""
         ...
 
+    def latest_for(self, restaurant_id: str) -> Offer | None:
+        """The most recently saved offer for a restaurant, if any.
+
+        Used by the pipeline's recovery path: the offer is persisted by
+        Python regardless of what the agent's narration looks like.
+        """
+        ...
+
 
 class InMemoryOfferRepository:
     """Process-local offer store — sufficient for a single pipeline run.
@@ -41,7 +49,7 @@ class InMemoryOfferRepository:
     """
 
     def __init__(self) -> None:
-        self._offers: dict[str, Offer] = {}
+        self._offers: dict[str, Offer] = {}  # insertion-ordered (dict semantics)
 
     def save(self, offer: Offer) -> None:
         self._offers[offer.offer_id] = offer
@@ -52,6 +60,12 @@ class InMemoryOfferRepository:
         if offer is None:
             raise OfferNotFoundError(offer_id)
         return offer
+
+    def latest_for(self, restaurant_id: str) -> Offer | None:
+        for offer in reversed(self._offers.values()):
+            if offer.restaurant_id == restaurant_id:
+                return offer
+        return None
 
 
 class OfferService:
@@ -121,3 +135,7 @@ class OfferService:
     def get_offer(self, offer_id: str) -> Offer:
         """Fetch a previously assembled offer by id."""
         return self._repository.get(offer_id)
+
+    def get_latest_offer(self, restaurant_id: str) -> Offer | None:
+        """Fetch the most recent offer for a restaurant (recovery path)."""
+        return self._repository.latest_for(restaurant_id)

@@ -151,6 +151,7 @@ class Container:
             knowledge_service=knowledge_service,
             restaurant_service=restaurant_service,
             validator_engine=validator_engine,
+            thresholds=thresholds,
             memory_service=memory_service,
             event_bus=event_bus,
         )

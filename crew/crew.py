@@ -34,6 +34,7 @@ from core.logging import get_logger
 from core.structured_output import extract_contract
 from crew.agents import AgentFactory
 from crew.tasks import TaskFactory
+from engines.recommendation_engine import RecommendationThresholds
 from engines.validator_engine import ValidatorEngine
 from events.bus import EventBus
 from events.events import (
@@ -42,7 +43,8 @@ from events.events import (
     ReportGenerated,
     ValidationCompleted,
 )
-from models.business_case import BusinessCase
+from models.business_case import BusinessCase, BusinessProblem
+from models.enums import ProblemCategory, Severity
 from models.offer import Offer, OfferRef
 from models.restaurant import RestaurantMetrics
 from models.validation import ValidationReport
@@ -66,6 +68,16 @@ DEVELOPER_TOOLS: tuple[str, ...] = (
 VALIDATOR_TOOLS: tuple[str, ...] = ("offer_validation",)
 #: Added to Architect + Developer belts when USE_BUSINESS_MEMORY is on.
 MEMORY_TOOL: str = "business_memory"
+
+#: Evidence mapping for the deterministic fallback diagnosis:
+#: problem category -> (RestaurantMetrics attribute, RecommendationThresholds attribute).
+_FALLBACK_EVIDENCE: dict[ProblemCategory, tuple[str, str]] = {
+    ProblemCategory.LOW_DELIVERY_SHARE: ("delivery_share", "min_delivery_share"),
+    ProblemCategory.LOW_RETENTION: ("retention_rate", "min_retention_rate"),
+    ProblemCategory.SLOW_KITCHEN: ("avg_kitchen_time_min", "max_kitchen_time_min"),
+    ProblemCategory.KITCHEN_OVERLOAD: ("kitchen_load", "max_kitchen_load"),
+    ProblemCategory.LOW_AVG_TICKET: ("avg_ticket", "min_avg_ticket"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +107,7 @@ class PalomaPipeline:
         knowledge_service: KnowledgeService,
         restaurant_service: RestaurantService,
         validator_engine: ValidatorEngine,
+        thresholds: RecommendationThresholds,
         memory_service: BusinessMemoryService | None,
         event_bus: EventBus,
     ) -> None:
@@ -107,6 +120,7 @@ class PalomaPipeline:
         self._knowledge_service = knowledge_service
         self._restaurant_service = restaurant_service
         self._validator_engine = validator_engine
+        self._thresholds = thresholds
         self._memory_service = memory_service
         self._event_bus = event_bus
 
@@ -138,27 +152,16 @@ class PalomaPipeline:
 
         context.metrics.record_llm_usage(getattr(crew_output, "token_usage", None))
 
-        # Typed contracts are extracted by OUR deterministic parser — no
-        # CrewAI converter, no schema round-trips to the provider.
-        business_case = extract_contract(self._stage_raw(crew_output, 0, "Architect"), BusinessCase)
-        offer_ref = extract_contract(self._stage_raw(crew_output, 1, "Developer"), OfferRef)
-
-        # The full offer never travelled through the LLM — fetch it from Python.
-        # This is also the anti-fabrication guard: an OfferRef pointing at an
-        # offer that was never generated cannot pass this line.
-        try:
-            offer = self._offer_service.get_offer(offer_ref.offer_id)
-        except OfferNotFoundError as exc:
-            raise AgentContractError(
-                f"Developer returned OfferRef '{offer_ref.offer_id}', but no such "
-                f"offer exists in the repository — the reference was fabricated "
-                f"instead of being produced by the offer_generator tool."
-            ) from exc
-        validation = self._resolve_validation(context, crew_output, offer)
-
         # Served from cache (the agents already read it) — powers the report's
         # restaurant profile section without another data-source round trip.
         metrics = self._restaurant_service.get_metrics(restaurant_id)
+
+        # Stage results are resolved with graceful degradation: agents only
+        # NARRATE — every artifact has a deterministic Python source of truth,
+        # so no single agent's output can abort the run.
+        offer = self._resolve_offer(crew_output, restaurant_id)
+        business_case = self._resolve_business_case(crew_output, metrics, offer)
+        validation = self._resolve_validation(context, crew_output, offer)
 
         bundle = self._report_service.render(business_case, offer, validation, metrics)
         self._event_bus.publish(
@@ -289,8 +292,88 @@ class PalomaPipeline:
         return callback
 
     # ------------------------------------------------------------------
-    # helpers
+    # stage resolution: narration first, deterministic fallback always
     # ------------------------------------------------------------------
+    def _resolve_offer(self, crew_output: object, restaurant_id: str) -> Offer:
+        """Locate the offer for this run.
+
+        Preferred path: parse the Developer's OfferRef and fetch by id.
+        Fallback: the offer was persisted by ``offer_generator`` (Python)
+        regardless of what the narration looks like — recover the latest
+        one for this restaurant from the repository. Only when the tool
+        was never successfully called does the run abort (there is
+        genuinely nothing to propose).
+        """
+        try:
+            ref = extract_contract(self._stage_raw(crew_output, 1, "Developer"), OfferRef)
+            return self._offer_service.get_offer(ref.offer_id)
+        except OfferNotFoundError as exc:
+            logger.warning(
+                "Developer narration referenced a non-existent offer (%s) — "
+                "recovering the real offer from the repository",
+                exc,
+            )
+        except AgentContractError as exc:
+            logger.warning(
+                "Developer narration unusable (%s) — recovering the offer from the repository",
+                exc,
+            )
+
+        offer = self._offer_service.get_latest_offer(restaurant_id)
+        if offer is None:
+            raise AgentContractError(
+                "The Developer never generated an offer: no parsable OfferRef in "
+                "its answer AND no offer for this restaurant in the repository. "
+                "The offer_generator tool was likely never called successfully."
+            )
+        logger.info("Offer %s recovered from the repository", offer.offer_id)
+        return offer
+
+    def _resolve_business_case(
+        self, crew_output: object, metrics: RestaurantMetrics, offer: Offer
+    ) -> BusinessCase:
+        """Take the Architect's diagnosis, or synthesise a deterministic one.
+
+        The fallback is built from the offer's rule-engine recommendations
+        plus real metrics/thresholds — evidence-grade data, just without
+        the LLM's narrative flourish. A broken Architect answer degrades
+        the report's prose, never the run.
+        """
+        try:
+            return extract_contract(self._stage_raw(crew_output, 0, "Architect"), BusinessCase)
+        except AgentContractError as exc:
+            logger.warning(
+                "Architect narration unusable (%s) — using the deterministic "
+                "fallback diagnosis",
+                exc,
+            )
+        return self._fallback_business_case(metrics, offer)
+
+    def _fallback_business_case(self, metrics: RestaurantMetrics, offer: Offer) -> BusinessCase:
+        problems: list[BusinessProblem] = []
+        for rec in offer.recommendations[:5]:
+            metric_attr, benchmark_attr = _FALLBACK_EVIDENCE.get(rec.addresses, ("", ""))
+            problems.append(
+                BusinessProblem(
+                    category=rec.addresses,
+                    severity=Severity.HIGH if rec.priority == 1 else Severity.MEDIUM,
+                    metric_name=metric_attr or rec.addresses.value.lower(),
+                    metric_value=float(getattr(metrics, metric_attr, 0.0) or 0.0),
+                    benchmark=float(getattr(self._thresholds, benchmark_attr, 0.0) or 0.0),
+                    summary=rec.rationale,
+                )
+            )
+        return BusinessCase(
+            restaurant_id=metrics.restaurant_id,
+            headline=(
+                f"{metrics.name}: {len(problems)} problem(s) identified by the "
+                f"deterministic rule engine."
+            ),
+            problems=problems,
+            growth_opportunities=[],
+            priority_order=[p.category for p in problems],
+        )
+
     def _resolve_validation(
         self, context: ExecutionContext, crew_output: object, offer: Offer
     ) -> ValidationReport:

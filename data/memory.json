@@ -5,18 +5,67 @@
       {
         "analyzed_at": "2026-01-12T10:30:00Z",
         "headline": "Dine-in dependent venue with weak retention and no delivery presence.",
-        "problem_categories": ["LOW_RETENTION", "LOW_DELIVERY_SHARE"]
+        "problem_categories": [
+          "LOW_RETENTION",
+          "LOW_DELIVERY_SHARE"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T11:50:43.898535Z",
+        "headline": "Dastarkhan Lounge: 2 problem(s) identified by the deterministic rule engine.",
+        "problem_categories": [
+          "LOW_DELIVERY_SHARE",
+          "KITCHEN_OVERLOAD"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T11:57:29.144953Z",
+        "headline": "Dastarkhan Lounge: weak retention and near-absent delivery channel compounded by kitchen overload and slow ticket times",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "LOW_DELIVERY_SHARE",
+          "KITCHEN_OVERLOAD",
+          "SLOW_KITCHEN"
+        ]
       }
     ],
     "offers": [
       {
         "offer_id": "OF-9A1B2C3D",
         "offered_at": "2026-01-14T09:00:00Z",
-        "module_codes": ["CRM_LOYALTY"],
+        "module_codes": [
+          "CRM_LOYALTY"
+        ],
         "roi_pct": 96.0,
         "outcome": "REJECTED",
-        "rejected_modules": ["CRM_LOYALTY"],
+        "rejected_modules": [
+          "CRM_LOYALTY"
+        ],
         "outcome_comment": "Owner declined: loyalty budget frozen until end of Q2 2026."
+      },
+      {
+        "offer_id": "OF-DF0DDB6A",
+        "offered_at": "2026-07-06T11:50:39.867332Z",
+        "module_codes": [
+          "DELIVERY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 299.12,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-17489823",
+        "offered_at": "2026-07-06T11:57:25.690260Z",
+        "module_codes": [
+          "DELIVERY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 299.12,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
       }
     ]
   },
@@ -26,18 +75,45 @@
       {
         "analyzed_at": "2026-03-02T14:00:00Z",
         "headline": "Healthy coffee shop with a small average ticket; no delivery ambitions.",
-        "problem_categories": ["LOW_AVG_TICKET", "LOW_DELIVERY_SHARE"]
+        "problem_categories": [
+          "LOW_AVG_TICKET",
+          "LOW_DELIVERY_SHARE"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T11:52:29.031569Z",
+        "headline": "Coffee & Crumbs: avg ticket far below target and zero delivery share are capping revenue despite solid kitchen ops and healthy retention.",
+        "problem_categories": [
+          "LOW_AVG_TICKET",
+          "LOW_DELIVERY_SHARE"
+        ]
       }
     ],
     "offers": [
       {
         "offer_id": "OF-77C0FFEE",
         "offered_at": "2026-03-04T11:30:00Z",
-        "module_codes": ["DELIVERY", "QR_MENU"],
+        "module_codes": [
+          "DELIVERY",
+          "QR_MENU"
+        ],
         "roi_pct": 141.0,
         "outcome": "PARTIALLY_ACCEPTED",
-        "rejected_modules": ["DELIVERY"],
+        "rejected_modules": [
+          "DELIVERY"
+        ],
         "outcome_comment": "QR Menu accepted; delivery declined — mall location, no couriers, owner sees no delivery fit."
+      },
+      {
+        "offer_id": "OF-AB5E266E",
+        "offered_at": "2026-07-06T11:52:26.016415Z",
+        "module_codes": [
+          "QR_MENU"
+        ],
+        "roi_pct": 467.17,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
       }
     ]
   },
@@ -47,18 +123,150 @@
       {
         "analyzed_at": "2026-04-18T09:45:00Z",
         "headline": "Four-location group: strong dine-in brand, weak retention and stretched kitchens.",
-        "problem_categories": ["LOW_RETENTION", "KITCHEN_OVERLOAD", "SLOW_KITCHEN"]
+        "problem_categories": [
+          "LOW_RETENTION",
+          "KITCHEN_OVERLOAD",
+          "SLOW_KITCHEN"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T11:56:23.147740Z",
+        "headline": "Tandoor Palace Group: retention crisis and kitchen strain persist despite partial KDS pilot; delivery channel remains underdeveloped.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "SLOW_KITCHEN",
+          "KITCHEN_OVERLOAD",
+          "LOW_DELIVERY_SHARE"
+        ]
       }
     ],
     "offers": [
       {
         "offer_id": "OF-CHA1N001",
         "offered_at": "2026-04-21T16:00:00Z",
-        "module_codes": ["KITCHEN_DISPLAY"],
+        "module_codes": [
+          "KITCHEN_DISPLAY"
+        ],
         "roi_pct": 187.0,
         "outcome": "PARTIALLY_ACCEPTED",
         "rejected_modules": [],
         "outcome_comment": "KDS piloted at the flagship location; group-wide rollout pending pilot results."
+      },
+      {
+        "offer_id": "OF-EBEAA923",
+        "offered_at": "2026-07-06T11:56:18.088836Z",
+        "module_codes": [
+          "DELIVERY",
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 452.42,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      }
+    ]
+  },
+  "R-002": {
+    "restaurant_id": "R-002",
+    "analyses": [
+      {
+        "analyzed_at": "2026-07-06T11:51:24.729158Z",
+        "headline": "Bella Napoli Pizzeria: 3 problem(s) identified by the deterministic rule engine.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "SLOW_KITCHEN",
+          "LOW_AVG_TICKET"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T11:58:13.157568Z",
+        "headline": "Bella Napoli Pizzeria: retention, average ticket and kitchen speed all miss platform benchmarks, echoing prior diagnosis with no improvement.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "LOW_AVG_TICKET",
+          "SLOW_KITCHEN"
+        ]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-DBC4DB2E",
+        "offered_at": "2026-07-06T11:51:21.611514Z",
+        "module_codes": [
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY",
+          "QR_MENU"
+        ],
+        "roi_pct": 459.16,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-07E915AB",
+        "offered_at": "2026-07-06T11:58:10.014243Z",
+        "module_codes": [
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY",
+          "QR_MENU"
+        ],
+        "roi_pct": 459.16,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      }
+    ]
+  },
+  "R-004": {
+    "restaurant_id": "R-004",
+    "analyses": [
+      {
+        "analyzed_at": "2026-07-06T11:55:09.994084Z",
+        "headline": "Retention below platform benchmark, compounded by negative NPS and heavy delivery-delay complaints at Sakura Sushi House",
+        "problem_categories": [
+          "LOW_RETENTION"
+        ]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-388E65AB",
+        "offered_at": "2026-07-06T11:55:07.289754Z",
+        "module_codes": [
+          "CRM_LOYALTY"
+        ],
+        "roi_pct": 426.08,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      }
+    ]
+  },
+  "R-005": {
+    "restaurant_id": "R-005",
+    "analyses": [
+      {
+        "analyzed_at": "2026-07-06T11:55:44.925284Z",
+        "headline": "Ghost Kitchen KZ: critical guest churn and kitchen overload are eroding repeat business despite healthy ticket size and delivery mix.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "KITCHEN_OVERLOAD"
+        ]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-4A9202C0",
+        "offered_at": "2026-07-06T11:55:41.423404Z",
+        "module_codes": [
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 439.81,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
       }
     ]
   }

@@ -30,6 +30,7 @@ logger = get_logger("core.structured_output")
 TModel = TypeVar("TModel", bound=BaseModel)
 
 _FENCE_RE = re.compile(r"```[a-zA-Z0-9_-]*")
+_TRAILING_COMMA_RE = re.compile(r",\s*([}\]])")
 #: How deep to unwrap single-key wrapper objects.
 _MAX_UNWRAP_DEPTH = 2
 
@@ -51,6 +52,10 @@ def extract_contract(raw: str, model: type[TModel]) -> TModel:
 
     text = _FENCE_RE.sub("", raw)
     candidates = list(_json_objects(text))
+    if not candidates:
+        # Second chance: repair the most common JSON defect (trailing commas)
+        # and rescan. Applied only when the strict pass found nothing.
+        candidates = list(_json_objects(_TRAILING_COMMA_RE.sub(r"\1", text)))
     last_error: ValidationError | None = None
 
     for index, candidate in enumerate(reversed(candidates)):

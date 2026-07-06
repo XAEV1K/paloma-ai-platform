@@ -11,8 +11,28 @@ from __future__ import annotations
 from enum import Enum, unique
 
 
+class NormalizedStrEnum(str, Enum):
+    """Case/format-tolerant string enum.
+
+    LLMs routinely emit ``"high"`` instead of ``"HIGH"`` or
+    ``"kitchen-display"`` instead of ``"KITCHEN_DISPLAY"`` — a production
+    run died on exactly this. Values are normalised (upper-case, spaces
+    and hyphens to underscores) before membership lookup, so the domain
+    vocabulary stays closed while its *spelling* is forgiving.
+    """
+
+    @classmethod
+    def _missing_(cls, value: object) -> "NormalizedStrEnum | None":
+        if isinstance(value, str):
+            normalized = value.strip().upper().replace("-", "_").replace(" ", "_")
+            for member in cls:
+                if member.value == normalized:
+                    return member
+        return None
+
+
 @unique
-class ModuleCode(str, Enum):
+class ModuleCode(NormalizedStrEnum):
     """Sellable Paloma365 product modules (mirror of ``data/modules.json``)."""
 
     DELIVERY = "DELIVERY"
@@ -24,7 +44,7 @@ class ModuleCode(str, Enum):
 
 
 @unique
-class ProblemCategory(str, Enum):
+class ProblemCategory(NormalizedStrEnum):
     """Business problems the Architect is allowed to diagnose."""
 
     LOW_DELIVERY_SHARE = "LOW_DELIVERY_SHARE"
@@ -37,7 +57,7 @@ class ProblemCategory(str, Enum):
 
 
 @unique
-class Severity(str, Enum):
+class Severity(NormalizedStrEnum):
     """Severity scale shared by problems and validation issues."""
 
     INFO = "INFO"
@@ -48,7 +68,7 @@ class Severity(str, Enum):
 
 
 @unique
-class ValidationStatus(str, Enum):
+class ValidationStatus(NormalizedStrEnum):
     """Terminal state of an offer validation run."""
 
     PASSED = "PASSED"
@@ -57,7 +77,7 @@ class ValidationStatus(str, Enum):
 
 
 @unique
-class OfferOutcome(str, Enum):
+class OfferOutcome(NormalizedStrEnum):
     """What ultimately happened to an offer — the business memory's currency."""
 
     SENT = "SENT"
@@ -68,7 +88,7 @@ class OfferOutcome(str, Enum):
 
 
 @unique
-class Currency(str, Enum):
+class Currency(NormalizedStrEnum):
     """ISO-4217 currencies supported by the pricing catalog."""
 
     KZT = "KZT"

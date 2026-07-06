@@ -40,6 +40,28 @@ def test_fabricated_reference_is_detected_by_extraction_plus_repository() -> Non
     assert ref.offer_id == "OF-FAKE"  # parsing succeeds; crew.run() checks existence
 
 
+def test_latest_offer_recovery_path(settings, tmp_path) -> None:
+    """Broken Developer narration -> the persisted offer is still recoverable."""
+    from engines.recommendation_engine import RecommendationEngine
+    from engines.roi_engine import ROIEngine
+    from services.knowledge_service import KnowledgeService
+    from services.offer_service import InMemoryOfferRepository, OfferService
+    from services.restaurant_service import CsvMetricsRepository
+
+    metrics = CsvMetricsRepository(settings.restaurants_csv).get_by_id("R-001")
+    knowledge = KnowledgeService(settings.modules_json, settings.prices_json)
+    service = OfferService(knowledge, ROIEngine(), InMemoryOfferRepository())
+
+    assert service.get_latest_offer("R-001") is None, "no offers yet"
+
+    recommendations = RecommendationEngine().recommend(metrics)
+    ref = service.build_offer(metrics, recommendations, "s")
+
+    recovered = service.get_latest_offer("R-001")
+    assert recovered is not None and recovered.offer_id == ref.offer_id
+    assert service.get_latest_offer("R-999") is None
+
+
 def test_domain_error_hierarchy() -> None:
     """The CLI catches PalomaError — every failure mode must be inside it."""
     assert issubclass(AgentContractError, PalomaError)

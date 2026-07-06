@@ -75,3 +75,33 @@ def test_garbage_is_a_contract_error_with_detail() -> None:
 def test_wrong_schema_reports_closest_failure() -> None:
     with pytest.raises(AgentContractError, match="validation error"):
         extract_contract('{"foo": 1}', OfferRef)
+
+
+def test_lowercase_enums_are_normalized() -> None:
+    """Production log: Architect emitted 'severity': 'high' — must parse."""
+    from models.business_case import BusinessCase
+
+    raw = (
+        '{"restaurant_id": "R-006", "headline": "h", '
+        '"problems": [{"category": "low_retention", "severity": "high", '
+        '"metric_name": "retention_rate", "metric_value": 0.15, '
+        '"benchmark": 0.25, "summary": "s"}], '
+        '"growth_opportunities": [], "priority_order": ["Low-Retention"]}'
+    )
+    case = extract_contract(raw, BusinessCase)
+    assert case.problems[0].severity.value == "HIGH"
+    assert case.problems[0].category.value == "LOW_RETENTION"
+    assert case.priority_order[0].value == "LOW_RETENTION"
+
+
+def test_extra_fields_are_ignored() -> None:
+    raw = _VALID_REF[:-1] + ', "confidence": 0.99, "notes": null}'
+    assert extract_contract(raw, OfferRef).offer_id == "OF-1"
+
+
+def test_trailing_commas_are_repaired() -> None:
+    raw = (
+        '{"offer_id": "OF-1", "restaurant_id": "R-001", '
+        '"module_codes": ["DELIVERY",], "headline": "ok",}'
+    )
+    assert extract_contract(raw, OfferRef).offer_id == "OF-1"
