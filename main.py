@@ -27,6 +27,8 @@ from core.container import Container  # noqa: E402
 from core.exceptions import PalomaError  # noqa: E402
 from core.logging import configure_logging, get_logger  # noqa: E402
 from metrics.report import render_summary, render_timeline  # noqa: E402
+from presentation import ReportContext  # noqa: E402
+from presentation.console import render_flow  # noqa: E402
 
 logger = get_logger("main")
 
@@ -65,16 +67,15 @@ def main(argv: list[str] | None = None) -> int:
 
         result = container.pipeline.run(args.restaurant_id)
 
-        print("\n" + "=" * 60)
-        print(f"  Restaurant   : {result.offer.restaurant_id}")
-        print(f"  Offer        : {result.offer.offer_id}")
-        print(f"  Modules      : {', '.join(c.value for c in result.offer.module_codes)}")
-        print(f"  ROI          : {result.offer.roi.roi_pct:.1f}%")
-        print(f"  Validation   : {result.validation.status.value}")
-        print(f"  Report       : {result.report_path}")
-        print("=" * 60)
-
         execution = result.execution
+        context = ReportContext(
+            business_case=result.business_case,
+            offer=result.offer,
+            validation=result.validation,
+            metrics=result.metrics,
+        )
+        print()
+        print(render_flow(context, execution.request_id, result.report_path, result.html_report_path))
         print()
         print(render_timeline(execution.tracer.spans))
         print()

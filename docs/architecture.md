@@ -82,7 +82,7 @@ CrewAI's `output_pydantic`:
 |---|---|---|
 | Analysis | `BusinessCase` | analytics/CRM tools (Python) |
 | Development | `OfferRef` (full `Offer` stays in Python) | `OfferService` + `ROIEngine` |
-| Validation | `ValidationReport` | `ValidatorEngine` |
+| Validation | `ValidationReport` — **recomputed by `ValidatorEngine` in the pipeline**; the agent's relay is narration, consistency-checked but never load-bearing | `ValidatorEngine` |
 
 The `OfferRef` pattern matters: the complete offer (prices, line items, ROI)
 is persisted in the `OfferRepository` and never serialised into the LLM

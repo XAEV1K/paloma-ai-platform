@@ -86,6 +86,23 @@ class Settings(BaseSettings):
     llm_price_input_per_1m: float | None = Field(default=None, ge=0)
     llm_price_output_per_1m: float | None = Field(default=None, ge=0)
 
+    # --- ROI calibration ---------------------------------------------------
+    # The conservative levers behind every projection. Calibrate against
+    # real Paloma365 customer outcomes as they become available.
+    roi_horizon_months: int = Field(default=12, ge=1)
+    roi_gross_margin_pct: float = Field(
+        default=0.30, gt=0, le=1,
+        description="Share of incremental revenue that becomes gross profit.",
+    )
+    roi_attribution_pct: float = Field(
+        default=0.60, gt=0, le=1,
+        description="Share of the uplift credibly attributable to the modules.",
+    )
+    roi_ramp_up_months: int = Field(
+        default=3, ge=0,
+        description="Months until modules reach full effect (linear ramp).",
+    )
+
     # --- Prompts ---------------------------------------------------------
     prompt_version: str = Field(
         default="v3",

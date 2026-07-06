@@ -18,7 +18,6 @@ from crewai import Agent, Task
 from core.logging import get_logger
 from models.business_case import BusinessCase
 from models.offer import OfferRef
-from models.validation import ValidationReport
 
 logger = get_logger("crew.tasks")
 
@@ -80,7 +79,14 @@ class TaskFactory:
     def validation_task(
         self, agent: Agent, context: list[Task], callback: TaskCallback | None = None
     ) -> Task:
-        """Validator stage: OfferRef -> ValidationReport."""
+        """Validator stage: OfferRef -> validation narration.
+
+        Deliberately NO ``output_pydantic`` here: the authoritative
+        ValidationReport is recomputed deterministically by the pipeline
+        (``ValidatorEngine``), so the agent's relay is presentation only
+        and a model that wraps/reshapes the JSON (observed with a
+        cost-tier model in production) can never abort the run.
+        """
         return Task(
             description=(
                 "Validate the offer referenced by the previous task's OfferRef using "
@@ -88,11 +94,10 @@ class TaskFactory:
                 "verbatim as your final answer."
             ),
             expected_output=(
-                "Raw JSON only (no markdown fences): the EXACT ValidationReport "
-                "returned by the offer_validation tool, verbatim and unmodified."
+                "The exact JSON returned by the offer_validation tool, verbatim "
+                "(no markdown fences, no wrapping keys, nothing added)."
             ),
             agent=agent,
             context=context,
-            output_pydantic=ValidationReport,
             callback=callback,
         )

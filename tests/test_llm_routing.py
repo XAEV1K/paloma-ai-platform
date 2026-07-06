@@ -11,8 +11,21 @@ from llm.routing import AgentRole, LLMRouter
 
 
 def _settings(**overrides: object) -> Settings:
-    """Isolated settings: ignore the developer's real .env file."""
-    return Settings(_env_file=None, **overrides)  # type: ignore[call-arg]
+    """Isolated settings.
+
+    ``_env_file=None`` skips the developer's .env, but third-party libs
+    (litellm) call ``load_dotenv()`` at import time and leak it into
+    ``os.environ`` — so routing-relevant fields are pinned explicitly
+    (init kwargs always win over environment values).
+    """
+    params: dict[str, object] = {
+        "model_architect": None,
+        "model_developer": None,
+        "model_validator": None,
+        "llm_temperature": None,
+    }
+    params.update(overrides)
+    return Settings(_env_file=None, **params)  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------

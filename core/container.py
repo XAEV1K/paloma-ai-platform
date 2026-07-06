@@ -30,6 +30,7 @@ from events.bus import InMemoryEventBus
 from events.events import DomainEvent
 from events.handlers import AuditLogHandler
 from llm.routing import LLMRouter
+from models.offer import RoiAssumptions
 from services.crm_service import CrmService
 from services.knowledge_service import KnowledgeService
 from services.memory_service import BusinessMemoryService, JsonMemoryRepository
@@ -92,7 +93,15 @@ class Container:
         # One thresholds instance shared by the rule engine AND the analytics
         # tool: the benchmarks agents quote are the thresholds rules fire on.
         thresholds = RecommendationThresholds()
-        roi_engine = ROIEngine()
+        # ROI economics are operator-calibrated via .env (ROI_* variables).
+        roi_engine = ROIEngine(
+            horizon_months=settings.roi_horizon_months,
+            assumptions=RoiAssumptions(
+                gross_margin_pct=settings.roi_gross_margin_pct,
+                attribution_pct=settings.roi_attribution_pct,
+                ramp_up_months=settings.roi_ramp_up_months,
+            ),
+        )
         recommendation_engine = RecommendationEngine(thresholds=thresholds)
         validator_engine = ValidatorEngine()
 
@@ -140,6 +149,7 @@ class Container:
             offer_service=offer_service,
             report_service=report_service,
             knowledge_service=knowledge_service,
+            restaurant_service=restaurant_service,
             validator_engine=validator_engine,
             memory_service=memory_service,
             event_bus=event_bus,

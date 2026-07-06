@@ -291,12 +291,51 @@ additionally enforces a hard 500% ROI credibility bound.
 
 ```
 restaurant_id
-   → Architect  ── analytics + CRM tools ──►  BusinessCase (typed)
-   → Developer  ── rules + knowledge + ROI ─►  Offer (persisted in Python)
-                                              OfferRef (returned to LLM)
-   → Validator  ── deterministic rule set ──►  ValidationReport (typed)
-   → ReportService ─────────────────────────►  reports/<id>-<ts>.md
+   → Architect  ── analytics + CRM + memory ─►  BusinessCase (typed)
+   → Developer  ── rules + knowledge + ROI ──►  Offer (persisted in Python)
+                                                OfferRef (returned to LLM)
+   → Validator  ── narration only ───────────►  consistency-checked, never load-bearing
+   → ValidatorEngine (Python) ───────────────►  authoritative ValidationReport
+   → ReportService ──────────────────────────►  reports/<id>-<ts>.md + .html
 ```
+
+**The verdict is never an LLM relay.** The Validator agent narrates the
+machine-made report for the demo, but the pipeline always recomputes the
+authoritative `ValidationReport` with `ValidatorEngine` — a model that
+wraps or reshapes the JSON cannot abort or alter the outcome (observed
+in production with a cost-tier model; the run now survives it with a
+logged warning).
+
+## Demo Output
+
+Every run ends with a product-style decision funnel, an execution
+timeline and a cost summary:
+
+```
+══════════════════════════════════════════════════════════════════
+  PALOMA AI DECISION PIPELINE · R-001 · request 6d9ba2d5e50d
+══════════════════════════════════════════════════════════════════
+  RESTAURANT
+    Dastarkhan Lounge — Almaty
+    Revenue 13,020,000 KZT/mo · 3,100 orders · avg ticket 4,200
+        ▼
+  BUSINESS ANALYSIS       "Dine-in dependent venue with weak retention..."
+        ▼
+  PROBLEMS DIAGNOSED (4)  [HIGH] LOW_RETENTION 0.18 vs benchmark 0.25 ...
+        ▼
+  RECOMMENDED MODULES (2) Paloma365 Delivery · Paloma365 Kitchen Display
+        ▼
+  PROJECTED ROI           299.1% · payback 3.8 mo · +263,421 KZT profit/mo
+        ▼
+  VALIDATION              ✅ PASSED (5 rules, 0 issues)
+        ▼
+  REPORTS                 reports/R-001-<ts>.md · reports/R-001-<ts>.html
+══════════════════════════════════════════════════════════════════
+```
+
+Two artifacts per run: a diffable **Markdown** report for analysts and a
+self-contained, styled **HTML** proposal for the client (inline CSS, no
+external assets, all LLM-authored text HTML-escaped).
 
 See [docs/architecture.md](docs/architecture.md) and
 [docs/sequence.md](docs/sequence.md) for the detailed diagrams.

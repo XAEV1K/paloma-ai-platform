@@ -39,11 +39,13 @@ from events.events import (
 )
 from models.business_case import BusinessCase
 from models.offer import Offer, OfferRef
+from models.restaurant import RestaurantMetrics
 from models.validation import ValidationReport
 from services.knowledge_service import KnowledgeService
 from services.memory_service import BusinessMemoryService
 from services.offer_service import OfferService
 from services.report_service import ReportService
+from services.restaurant_service import RestaurantService
 
 logger = get_logger("crew.pipeline")
 
@@ -68,7 +70,9 @@ class PipelineResult:
     business_case: BusinessCase
     offer: Offer
     validation: ValidationReport
+    metrics: RestaurantMetrics
     report_path: Path
+    html_report_path: Path
     execution: ExecutionContext
 
 
@@ -84,6 +88,7 @@ class PalomaPipeline:
         offer_service: OfferService,
         report_service: ReportService,
         knowledge_service: KnowledgeService,
+        restaurant_service: RestaurantService,
         validator_engine: ValidatorEngine,
         memory_service: BusinessMemoryService | None,
         event_bus: EventBus,
@@ -95,6 +100,7 @@ class PalomaPipeline:
         self._offer_service = offer_service
         self._report_service = report_service
         self._knowledge_service = knowledge_service
+        self._restaurant_service = restaurant_service
         self._validator_engine = validator_engine
         self._memory_service = memory_service
         self._event_bus = event_bus
@@ -141,13 +147,17 @@ class PalomaPipeline:
             ) from exc
         validation = self._resolve_validation(context, crew_output, offer)
 
-        report_path = self._report_service.render(business_case, offer, validation)
+        # Served from cache (the agents already read it) — powers the report's
+        # restaurant profile section without another data-source round trip.
+        metrics = self._restaurant_service.get_metrics(restaurant_id)
+
+        bundle = self._report_service.render(business_case, offer, validation, metrics)
         self._event_bus.publish(
             ReportGenerated(
                 request_id=context.request_id,
                 restaurant_id=restaurant_id,
                 offer_id=offer.offer_id,
-                report_path=str(report_path),
+                report_path=str(bundle.markdown_path),
             )
         )
 
@@ -158,13 +168,15 @@ class PalomaPipeline:
             "Pipeline finished for %s: validation=%s, report=%s",
             restaurant_id,
             validation.status.value,
-            report_path.name,
+            bundle.markdown_path.name,
         )
         return PipelineResult(
             business_case=business_case,
             offer=offer,
             validation=validation,
-            report_path=report_path,
+            metrics=metrics,
+            report_path=bundle.markdown_path,
+            html_report_path=bundle.html_path,
             execution=context,
         )
 
@@ -255,13 +267,40 @@ class PalomaPipeline:
     def _on_validation_done(self, context: ExecutionContext):
         def callback(task_output: object) -> None:
             context.tracer.mark_stage_end("Validator stage")
-            report = getattr(task_output, "pydantic", None)
-            if isinstance(report, ValidationReport):
-                self._publish_validation(context, report)
 
         return callback
 
-    def _publish_validation(self, context: ExecutionContext, report: ValidationReport) -> None:
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+    def _resolve_validation(
+        self, context: ExecutionContext, crew_output: object, offer: Offer
+    ) -> ValidationReport:
+        """Produce the authoritative validation verdict.
+
+        The verdict is ALWAYS the deterministic engine's output — an LLM
+        relay must never be load-bearing (audit finding: a cost-tier model
+        wrapped the report JSON in an extra key and aborted the run at the
+        step with zero degrees of freedom). When the Validator agent ran,
+        its narration is only checked for consistency and logged.
+        """
+        report = self._validator_engine.validate(offer, self._knowledge_service.knowledge_base)
+
+        if self._settings.use_validator_agent:
+            narration = self._validator_narration(crew_output)
+            if report.status.value in narration and report.offer_id in narration:
+                logger.info(
+                    "Validator narration consistent with machine verdict (%s)",
+                    report.status.value,
+                )
+            else:
+                logger.warning(
+                    "Validator narration diverged from the machine verdict — "
+                    "using the engine report (this is why the relay is not load-bearing)"
+                )
+        else:
+            context.tracer.mark_stage_end("Validation (engine only)")
+
         self._event_bus.publish(
             ValidationCompleted(
                 request_id=context.request_id,
@@ -270,26 +309,15 @@ class PalomaPipeline:
                 issue_count=len(report.issues),
             )
         )
-
-    # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
-    def _resolve_validation(
-        self, context: ExecutionContext, crew_output: object, offer: Offer
-    ) -> ValidationReport:
-        """Take the Validator agent's report, or run the engine directly.
-
-        The deterministic firewall always runs: disabling the agent only
-        removes the LLM narration around it, never the check itself.
-        """
-        if self._settings.use_validator_agent:
-            tasks_output = crew_output.tasks_output  # type: ignore[attr-defined]
-            return self._typed_output(tasks_output[2], ValidationReport)
-
-        report = self._validator_engine.validate(offer, self._knowledge_service.knowledge_base)
-        context.tracer.mark_stage_end("Validation (engine only)")
-        self._publish_validation(context, report)
         return report
+
+    @staticmethod
+    def _validator_narration(crew_output: object) -> str:
+        """The Validator agent's raw final answer, if the stage ran."""
+        outputs = getattr(crew_output, "tasks_output", None) or []
+        if len(outputs) >= 3:
+            return str(getattr(outputs[2], "raw", "") or "")
+        return ""
 
     @staticmethod
     def _typed_output[T](task_output: object, model: type[T]) -> T:
