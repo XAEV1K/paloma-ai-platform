@@ -45,6 +45,13 @@ class OfferNotFoundError(PalomaError):
         self.offer_id = offer_id
 
 
+class PipelineExecutionError(PalomaError):
+    """Raised when the agent crew fails to execute (provider outage, 4xx,
+    timeout, framework fault). Wraps the underlying cause into a clean
+    domain failure so the CLI never shows a third-party traceback.
+    """
+
+
 class AgentContractError(PalomaError):
     """Raised when an LLM agent's output violates a pipeline contract.
 

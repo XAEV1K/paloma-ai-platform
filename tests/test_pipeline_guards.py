@@ -1,36 +1,46 @@
-"""Pipeline anti-hallucination guards (no LLM required)."""
+"""Pipeline anti-hallucination and resilience guards (no LLM required)."""
 
 from __future__ import annotations
 
 import pytest
 
-from core.exceptions import AgentContractError, PalomaError
+from core.exceptions import (
+    AgentContractError,
+    PalomaError,
+    PipelineExecutionError,
+)
+from core.structured_output import extract_contract
 from crew.crew import PalomaPipeline
 from models.offer import OfferRef
 
 
-class _FakeTaskOutput:
-    def __init__(self, payload: object) -> None:
-        self.pydantic = payload
+class _FakeCrewOutput:
+    def __init__(self, raws: list[str]) -> None:
+        self.tasks_output = [type("T", (), {"raw": raw})() for raw in raws]
 
 
-def test_typed_output_accepts_the_contract_model() -> None:
-    ref = OfferRef(
-        offer_id="OF-1", restaurant_id="R-001", module_codes=["DELIVERY"], headline="h"
+def test_stage_raw_returns_the_stage_answer() -> None:
+    output = _FakeCrewOutput(["first", "second"])
+    assert PalomaPipeline._stage_raw(output, 1, "Developer") == "second"
+
+
+def test_missing_stage_is_a_clean_contract_error() -> None:
+    output = _FakeCrewOutput(["only one"])
+    with pytest.raises(AgentContractError, match="Developer stage produced no output"):
+        PalomaPipeline._stage_raw(output, 1, "Developer")
+
+
+def test_fabricated_reference_is_detected_by_extraction_plus_repository() -> None:
+    """The extractor accepts the JSON; the repository lookup is the guard."""
+    raw = (
+        '{"offer_id": "OF-FAKE", "restaurant_id": "R-001", '
+        '"module_codes": ["DELIVERY"], "headline": "looks legit"}'
     )
-    assert PalomaPipeline._typed_output(_FakeTaskOutput(ref), OfferRef) is ref
+    ref = extract_contract(raw, OfferRef)
+    assert ref.offer_id == "OF-FAKE"  # parsing succeeds; crew.run() checks existence
 
 
-def test_typed_output_rejects_wrong_payload() -> None:
-    with pytest.raises(AgentContractError, match="expected OfferRef"):
-        PalomaPipeline._typed_output(_FakeTaskOutput({"offer_id": "OF-1"}), OfferRef)
-
-
-def test_typed_output_rejects_missing_payload() -> None:
-    with pytest.raises(AgentContractError):
-        PalomaPipeline._typed_output(object(), OfferRef)
-
-
-def test_contract_error_is_a_domain_error() -> None:
-    """The CLI catches PalomaError — contract violations must exit cleanly."""
+def test_domain_error_hierarchy() -> None:
+    """The CLI catches PalomaError — every failure mode must be inside it."""
     assert issubclass(AgentContractError, PalomaError)
+    assert issubclass(PipelineExecutionError, PalomaError)

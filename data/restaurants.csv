@@ -1,6 +1,7 @@
 restaurant_id,name,city,avg_ticket,orders_per_month,avg_kitchen_time_min,avg_delivery_time_min,retention_rate,ltv,delivery_share,takeaway_share,dine_in_share,kitchen_load
 R-001,Dastarkhan Lounge,Almaty,4200,3100,24.5,48.0,0.18,32000,0.08,0.17,0.75,0.88
-R-002,Burger Depot,Astana,2800,5400,12.0,31.5,0.31,18500,0.42,0.23,0.35,0.72
-R-003,Sakura Sushi House,Almaty,6900,1800,19.0,39.0,0.22,54000,0.36,0.14,0.50,0.61
-R-004,Coffee & Crumbs,Shymkent,1900,4700,8.5,0.0,0.44,12800,0.00,0.31,0.69,0.55
-R-005,Tandoor Palace,Astana,5300,2400,27.0,52.5,0.15,41000,0.11,0.09,0.80,0.91
+R-002,Bella Napoli Pizzeria,Astana,3200,4200,22.0,55.0,0.21,21000,0.38,0.22,0.40,0.79
+R-003,Coffee & Crumbs,Shymkent,1800,3900,6.0,0.0,0.41,14000,0.00,0.34,0.66,0.52
+R-004,Sakura Sushi House,Almaty,6900,1900,19.0,52.0,0.24,54000,0.36,0.12,0.52,0.63
+R-005,Ghost Kitchen KZ,Astana,3900,4800,17.0,41.0,0.19,18000,0.86,0.14,0.00,0.93
+R-006,Tandoor Palace Group,Astana,5300,3000,26.0,49.0,0.15,41000,0.11,0.09,0.80,0.91

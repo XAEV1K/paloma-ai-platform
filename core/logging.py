@@ -38,13 +38,25 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger(ROOT_LOGGER_NAME)
     root.setLevel(level.upper())
 
+    formatter = logging.Formatter(fmt=_LOG_FORMAT, datefmt=_DATE_FORMAT)
+
     if not root.handlers:  # idempotency guard
         handler = logging.StreamHandler(stream=sys.stdout)
-        handler.setFormatter(logging.Formatter(fmt=_LOG_FORMAT, datefmt=_DATE_FORMAT))
+        handler.setFormatter(formatter)
         root.addHandler(handler)
 
     # Do not propagate into the (possibly noisy) global root logger.
     root.propagate = False
+
+    # Third-party libraries (CrewAI logs provider errors via logging.error on
+    # the ROOT logger) would otherwise print unformatted "ERROR:root:" lines.
+    # Give the global root the same format, warnings and above only.
+    global_root = logging.getLogger()
+    if not global_root.handlers:
+        third_party = logging.StreamHandler(stream=sys.stdout)
+        third_party.setFormatter(formatter)
+        global_root.addHandler(third_party)
+    global_root.setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

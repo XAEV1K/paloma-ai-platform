@@ -95,6 +95,8 @@ def test_markdown_report_contains_every_section(report_context: ReportContext) -
     document = render_markdown(report_context)
     for marker in (
         "# Business Proposal",
+        "## Business Health Score",
+        "85/100",
         "## Restaurant Profile",
         "## Diagnosis",
         "## Recommended Paloma365 Modules",
@@ -111,6 +113,8 @@ def test_html_report_is_selfcontained_and_escaped(report_context: ReportContext)
     document = render_html(report_context)
     assert document.startswith("<!DOCTYPE html>")
     assert "VALIDATED" in document and "Paloma365 Delivery" in document
+    assert "Business Health Score" in document and "Implementation Timeline" in document
+    assert "Paloma365 AI Decision Platform" in document
     assert "<script>alert(1)</script>" not in document, "LLM-authored text must be escaped"
     assert "&lt;script&gt;" in document
     assert "http://" not in document and "https://" not in document, "no external assets"
@@ -123,14 +127,22 @@ def test_console_flow_tells_the_whole_story(report_context: ReportContext) -> No
     for stage in (
         "RESTAURANT",
         "BUSINESS ANALYSIS",
+        "BUSINESS HEALTH",
         "PROBLEMS DIAGNOSED (1)",
+        "GROWTH OPPORTUNITIES (1)",
         "RECOMMENDED MODULES (1)",
         "PROJECTED ROI",
         "VALIDATION",
-        "REPORTS",
+        "COMMERCIAL PROPOSAL",
     ):
         assert stage in flow, f"missing funnel stage: {stage}"
-    assert flow.index("RESTAURANT") < flow.index("PROJECTED ROI") < flow.index("REPORTS")
+    assert (
+        flow.index("RESTAURANT")
+        < flow.index("BUSINESS HEALTH")
+        < flow.index("PROJECTED ROI")
+        < flow.index("COMMERCIAL PROPOSAL")
+    )
+    assert "85/100" in flow, "one HIGH problem -> health score 85"
 
 
 def test_report_service_writes_both_artifacts(

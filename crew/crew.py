@@ -17,16 +17,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-from pydantic import ValidationError
-
 from crewai import Crew, Process, Task
 
 from crewai.tools import BaseTool
 
 from config.settings import Settings
 from core.context import ExecutionContext, execution_scope
-from core.exceptions import AgentContractError, ConfigurationError, OfferNotFoundError
+from core.exceptions import (
+    AgentContractError,
+    ConfigurationError,
+    OfferNotFoundError,
+    PalomaError,
+    PipelineExecutionError,
+)
 from core.logging import get_logger
+from core.structured_output import extract_contract
 from crew.agents import AgentFactory
 from crew.tasks import TaskFactory
 from engines.validator_engine import ValidatorEngine
@@ -72,7 +77,7 @@ class PipelineResult:
     validation: ValidationReport
     metrics: RestaurantMetrics
     report_path: Path
-    html_report_path: Path
+    html_report_path: Path | None  # None when the optional HTML artifact failed
     execution: ExecutionContext
 
 
@@ -120,19 +125,23 @@ class PalomaPipeline:
             crew = self._build_crew(context)
             try:
                 crew_output = crew.kickoff(inputs={"restaurant_id": restaurant_id})
-            except ValidationError as exc:
-                # An agent's final answer did not parse into its contract
-                # (e.g. an over-long field after a fabricated response).
-                raise AgentContractError(
-                    f"An agent's final answer violated its output contract "
-                    f"({exc.error_count()} validation error(s) for {exc.title}). "
-                    f"First error: {exc.errors()[0].get('msg', 'unknown')}"
+            except PalomaError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — framework/provider boundary
+                # CrewAI/providers raise arbitrary exception types (HTTP 4xx,
+                # timeouts, framework faults). The CLI must show a clean
+                # domain failure, never a third-party traceback.
+                raise PipelineExecutionError(
+                    f"Agent crew execution failed ({type(exc).__name__}): "
+                    f"{str(exc)[:300]}"
                 ) from exc
 
         context.metrics.record_llm_usage(getattr(crew_output, "token_usage", None))
 
-        business_case = self._typed_output(crew_output.tasks_output[0], BusinessCase)
-        offer_ref = self._typed_output(crew_output.tasks_output[1], OfferRef)
+        # Typed contracts are extracted by OUR deterministic parser — no
+        # CrewAI converter, no schema round-trips to the provider.
+        business_case = extract_contract(self._stage_raw(crew_output, 0, "Architect"), BusinessCase)
+        offer_ref = extract_contract(self._stage_raw(crew_output, 1, "Developer"), OfferRef)
 
         # The full offer never travelled through the LLM — fetch it from Python.
         # This is also the anti-fabrication guard: an OfferRef pointing at an
@@ -162,7 +171,12 @@ class PalomaPipeline:
         )
 
         if self._memory_service is not None:
-            self._memory_service.record_run(business_case, offer)
+            try:
+                self._memory_service.record_run(business_case, offer)
+            except Exception:  # noqa: BLE001 — memory is enrichment, not critical path
+                logger.exception(
+                    "Business memory update failed — continuing (history will miss this run)"
+                )
 
         logger.info(
             "Pipeline finished for %s: validation=%s, report=%s",
@@ -233,34 +247,38 @@ class PalomaPipeline:
     def _on_analysis_done(self, context: ExecutionContext):
         def callback(task_output: object) -> None:
             context.tracer.mark_stage_end("Architect stage")
-            case = getattr(task_output, "pydantic", None)
-            if isinstance(case, BusinessCase):
-                self._event_bus.publish(
-                    BusinessCaseCreated(
-                        request_id=context.request_id,
-                        restaurant_id=case.restaurant_id,
-                        headline=case.headline,
-                        problem_count=len(case.problems),
-                    )
+            try:
+                case = extract_contract(str(getattr(task_output, "raw", "") or ""), BusinessCase)
+            except AgentContractError:
+                return  # the pipeline will surface the full error after kickoff
+            self._event_bus.publish(
+                BusinessCaseCreated(
+                    request_id=context.request_id,
+                    restaurant_id=case.restaurant_id,
+                    headline=case.headline,
+                    problem_count=len(case.problems),
                 )
+            )
 
         return callback
 
     def _on_development_done(self, context: ExecutionContext):
         def callback(task_output: object) -> None:
             context.tracer.mark_stage_end("Developer stage")
-            ref = getattr(task_output, "pydantic", None)
-            if isinstance(ref, OfferRef):
+            try:
+                ref = extract_contract(str(getattr(task_output, "raw", "") or ""), OfferRef)
                 offer = self._offer_service.get_offer(ref.offer_id)
-                self._event_bus.publish(
-                    OfferCreated(
-                        request_id=context.request_id,
-                        restaurant_id=ref.restaurant_id,
-                        offer_id=ref.offer_id,
-                        module_codes=list(ref.module_codes),
-                        roi_pct=offer.roi.roi_pct,
-                    )
+            except PalomaError:
+                return  # fabricated/broken refs are handled after kickoff
+            self._event_bus.publish(
+                OfferCreated(
+                    request_id=context.request_id,
+                    restaurant_id=ref.restaurant_id,
+                    offer_id=ref.offer_id,
+                    module_codes=list(ref.module_codes),
+                    roi_pct=offer.roi.roi_pct,
                 )
+            )
 
         return callback
 
@@ -312,20 +330,19 @@ class PalomaPipeline:
         return report
 
     @staticmethod
-    def _validator_narration(crew_output: object) -> str:
+    def _stage_raw(crew_output: object, index: int, stage: str) -> str:
+        """The raw final answer of a pipeline stage, or a clean contract error."""
+        outputs = getattr(crew_output, "tasks_output", None) or []
+        if len(outputs) <= index:
+            raise AgentContractError(
+                f"{stage} stage produced no output (crew returned "
+                f"{len(outputs)} task output(s))."
+            )
+        return str(getattr(outputs[index], "raw", "") or "")
+
+    def _validator_narration(self, crew_output: object) -> str:
         """The Validator agent's raw final answer, if the stage ran."""
         outputs = getattr(crew_output, "tasks_output", None) or []
         if len(outputs) >= 3:
             return str(getattr(outputs[2], "raw", "") or "")
         return ""
-
-    @staticmethod
-    def _typed_output[T](task_output: object, model: type[T]) -> T:
-        """Extract the contract model from a CrewAI task output, fail loudly."""
-        pydantic_payload = getattr(task_output, "pydantic", None)
-        if not isinstance(pydantic_payload, model):
-            raise AgentContractError(
-                f"Pipeline contract violation: expected {model.__name__}, "
-                f"got {type(pydantic_payload).__name__}"
-            )
-        return pydantic_payload

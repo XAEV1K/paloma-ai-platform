@@ -19,5 +19,47 @@
         "outcome_comment": "Owner declined: loyalty budget frozen until end of Q2 2026."
       }
     ]
+  },
+  "R-003": {
+    "restaurant_id": "R-003",
+    "analyses": [
+      {
+        "analyzed_at": "2026-03-02T14:00:00Z",
+        "headline": "Healthy coffee shop with a small average ticket; no delivery ambitions.",
+        "problem_categories": ["LOW_AVG_TICKET", "LOW_DELIVERY_SHARE"]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-77C0FFEE",
+        "offered_at": "2026-03-04T11:30:00Z",
+        "module_codes": ["DELIVERY", "QR_MENU"],
+        "roi_pct": 141.0,
+        "outcome": "PARTIALLY_ACCEPTED",
+        "rejected_modules": ["DELIVERY"],
+        "outcome_comment": "QR Menu accepted; delivery declined — mall location, no couriers, owner sees no delivery fit."
+      }
+    ]
+  },
+  "R-006": {
+    "restaurant_id": "R-006",
+    "analyses": [
+      {
+        "analyzed_at": "2026-04-18T09:45:00Z",
+        "headline": "Four-location group: strong dine-in brand, weak retention and stretched kitchens.",
+        "problem_categories": ["LOW_RETENTION", "KITCHEN_OVERLOAD", "SLOW_KITCHEN"]
+      }
+    ],
+    "offers": [
+      {
+        "offer_id": "OF-CHA1N001",
+        "offered_at": "2026-04-21T16:00:00Z",
+        "module_codes": ["KITCHEN_DISPLAY"],
+        "roi_pct": 187.0,
+        "outcome": "PARTIALLY_ACCEPTED",
+        "rejected_modules": [],
+        "outcome_comment": "KDS piloted at the flagship location; group-wide rollout pending pilot results."
+      }
+    ]
   }
 }

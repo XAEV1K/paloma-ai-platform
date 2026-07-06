@@ -8,6 +8,7 @@ from the same :class:`ReportContext`, so they can never disagree.
 from __future__ import annotations
 
 from presentation import ReportContext
+from presentation.scoring import health_grade, health_score
 
 
 def render_markdown(context: ReportContext) -> str:
@@ -44,9 +45,19 @@ def render_markdown(context: ReportContext) -> str:
     )
     assumptions = offer.roi.assumptions
 
+    score = health_score(case)
+
     return f"""# Business Proposal — {metrics.name} ({offer.restaurant_id})
 
+**Prepared by:** Paloma365 AI Decision Platform
+**Offer:** `{offer.offer_id}` · **Date:** {offer.created_at:%d %B %Y}
+
 > {case.headline}
+
+## Business Health Score
+
+**{score}/100 — {health_grade(score)}**
+(deterministic: 100 minus severity-weighted penalties per diagnosed problem)
 
 ## Restaurant Profile
 

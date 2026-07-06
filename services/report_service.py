@@ -28,10 +28,14 @@ logger = get_logger("services.report")
 
 @dataclass(frozen=True, slots=True)
 class ReportBundle:
-    """Paths of every artifact produced for one pipeline run."""
+    """Paths of every artifact produced for one pipeline run.
+
+    Markdown is the essential artifact (its failure aborts the run);
+    HTML is presentation — its failure is logged and the run continues.
+    """
 
     markdown_path: Path
-    html_path: Path
+    html_path: Path | None
 
 
 class ReportService:
@@ -60,8 +64,16 @@ class ReportService:
         markdown_path = self._reports_dir / f"{stem}.md"
         markdown_path.write_text(render_markdown(context), encoding="utf-8")
 
-        html_path = self._reports_dir / f"{stem}.html"
-        html_path.write_text(render_html(context), encoding="utf-8")
+        html_path: Path | None = self._reports_dir / f"{stem}.html"
+        try:
+            html_path.write_text(render_html(context), encoding="utf-8")
+        except Exception:  # noqa: BLE001 — HTML is optional presentation
+            logger.exception("HTML report rendering failed — Markdown is still available")
+            html_path = None
 
-        logger.info("Report generated -> %s (+ %s)", markdown_path, html_path.name)
+        logger.info(
+            "Report generated -> %s (+ %s)",
+            markdown_path,
+            html_path.name if html_path else "HTML skipped",
+        )
         return ReportBundle(markdown_path=markdown_path, html_path=html_path)

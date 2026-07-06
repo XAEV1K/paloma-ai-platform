@@ -4,6 +4,26 @@
 
 `python 3.12+` · `crewai 1.x` · `pydantic v2` · **prompt version: v3** · multi-model routing (OpenAI / Anthropic / Gemini / OpenRouter / Ollama)
 
+## Features
+
+- **Three-agent decision pipeline** (Architect → Developer → Validator) with
+  strict typed contracts between stages — agents exchange Pydantic models, not prose
+- **LLM thinks, Python works**: every number (ROI, payback, prices, health
+  score) is computed by deterministic, unit-tested engines
+- **Multi-model routing**: each agent role runs on its own model via config
+  (strong reasoner / fast tool-caller / cheap relay)
+- **Deterministic contract extraction**: LLM answers are parsed by the
+  platform's own extractor — no framework converter, no schema round-trips
+  to providers, drafts/fences/wrapper-keys all handled
+- **Anti-hallucination firewall**: rule-based offer validation (ROI bounds,
+  catalog prices, module existence) that no agent can override
+- **Business memory**: per-restaurant engagement history — rejected modules
+  are never blindly re-pitched
+- **Full observability**: request-scoped metrics (tokens, cost, tool calls),
+  execution timeline, domain events on an in-process bus
+- **Client-ready artifacts**: consultant-style Markdown + self-contained
+  HTML proposal with Business Health Score and implementation timeline
+
 The platform analyses a restaurant's real performance metrics, diagnoses growth
 bottlenecks, selects the right Paloma365 product modules, computes the financial
 effect deterministically, and produces a validated, client-ready commercial
@@ -101,12 +121,32 @@ Requires **Python 3.12+**.
 ## Quick Start
 
 ```bash
-# See which demo restaurants are available
-python main.py --list-restaurants
+# Demo mode: clean product-style output + auto-opens the HTML proposal
+python main.py --demo
 
 # Run the full pipeline for one restaurant
-python main.py --restaurant-id R-001
+python main.py --restaurant-id R-006 --open-report
+
+# See which demo restaurants are available
+python main.py --list-restaurants
 ```
+
+CLI flags: `--demo` (clean demo run), `--open-report` (open the HTML
+proposal in the browser), `--verbose` / `--quiet` (log verbosity).
+
+### Demo Scenarios
+
+Six restaurants, six different stories — each triggers a different rule
+combination and carries its own engagement history:
+
+| ID | Concept | Story |
+|---|---|---|
+| `R-001` | Dine-in lounge | Retention + delivery + kitchen issues; **loyalty was rejected in January** — memory-aware re-pitch |
+| `R-002` | Pizzeria | Weak retention, slow kitchen, small ticket → 3-module bundle |
+| `R-003` | Coffee shop | Small ticket; **delivery was declined before** (mall location) |
+| `R-004` | Sushi house | Healthy business, single retention gap → minimal offer |
+| `R-005` | Dark kitchen | 93% kitchen load, weak retention, zero dine-in |
+| `R-006` | Restaurant group (flagship) | Everything at once + a KDS pilot in history — the flagship demo |
 
 A successful run streams the agent trace and finishes with:
 
@@ -211,11 +251,24 @@ Each agent gets a **least-privilege tool belt** — it can only see the tools it
 role requires, which reduces both prompt size and failure surface. Backstories
 are versioned files (`prompts/<agent>_v<N>.md`); the active version is the
 `PROMPT_VERSION` config value, currently **v3** (grounded benchmarks, explicit
-anti-fabrication rules, hard length limits). Contract enforcement is layered:
-tool inputs are re-validated by the tool base class, agent outputs must parse
-into `output_pydantic` contracts, and the pipeline verifies that a returned
-`OfferRef` points at an offer that actually exists — a fabricated reference
-fails the run with a clean `AgentContractError`, never a raw traceback.
+anti-fabrication rules, hard length limits).
+
+**Contract enforcement is layered and framework-independent:**
+
+1. Tool inputs are re-validated by the tool base class (CrewAI passes nested
+   args as raw dicts).
+2. Agent outputs are parsed by the platform's own deterministic extractor
+   (`core/structured_output.py`) — **not** by CrewAI's converter, which
+   re-calls the LLM with provider-specific JSON schemas (Anthropic rejects
+   `maxItems`; observed 400s + burned retries in production). The extractor
+   handles markdown fences, prose around JSON, draft-then-correction answers
+   (last valid blob wins) and single-key wrapper objects — in pure Python,
+   with zero extra LLM calls.
+3. The pipeline verifies that a returned `OfferRef` points at an offer that
+   actually exists — a fabricated reference fails the run with a clean
+   `AgentContractError`, never a raw traceback.
+4. The validation verdict is always recomputed by `ValidatorEngine`; the
+   Validator agent's relay is narration only.
 
 ## Tools
 
