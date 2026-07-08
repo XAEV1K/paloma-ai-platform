@@ -35,11 +35,19 @@ logger = get_logger("llm.routing")
 
 @unique
 class AgentRole(str, Enum):
-    """Pipeline roles that can be routed to different models."""
+    """Platform roles that can be routed to different models.
 
-    ARCHITECT = "architect"
-    DEVELOPER = "developer"
-    VALIDATOR = "validator"
+    Decision-pipeline roles (architect/developer/validator) and
+    conversational roles (support/sales/technical) share one router:
+    every model assignment in the platform lives in one table.
+    """
+
+    ARCHITECT = "architect"    # Business Analyst: the diagnosis is the product
+    DEVELOPER = "developer"    # Report Generator: structured tool-calling
+    VALIDATOR = "validator"    # QA relay: fully deterministic
+    SUPPORT = "support"        # Support Agent: grounded, empathetic, fast
+    SALES = "sales"            # Sales Agent: persuasive but grounded
+    TECHNICAL = "technical"    # Technical Expert: precise, terse
 
 
 #: Per-role temperature policy. Overridable globally via LLM_TEMPERATURE.
@@ -47,6 +55,9 @@ _ROLE_TEMPERATURES: Final[dict[AgentRole, float]] = {
     AgentRole.ARCHITECT: 0.2,  # reasoning benefits from a little breadth
     AgentRole.DEVELOPER: 0.1,  # structured tool calls: near-deterministic
     AgentRole.VALIDATOR: 0.0,  # relay a machine verdict: fully deterministic
+    AgentRole.SUPPORT: 0.4,    # natural conversation, still grounded
+    AgentRole.SALES: 0.5,      # a little persuasion latitude
+    AgentRole.TECHNICAL: 0.2,  # precision over style
 }
 
 
@@ -136,6 +147,9 @@ class LLMRouter:
             AgentRole.ARCHITECT: self._settings.model_architect,
             AgentRole.DEVELOPER: self._settings.model_developer,
             AgentRole.VALIDATOR: self._settings.model_validator,
+            AgentRole.SUPPORT: self._settings.model_support,
+            AgentRole.SALES: self._settings.model_sales,
+            AgentRole.TECHNICAL: self._settings.model_technical,
         }
         return per_role[role] or self._settings.llm_model
 

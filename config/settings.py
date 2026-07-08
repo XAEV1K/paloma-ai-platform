@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         default=None,
         description="Cheapest/fastest model — it only relays a machine verdict.",
     )
+    # Conversational roles (support/sales/technical) — same fallback chain.
+    model_support: str | None = Field(default=None)
+    model_sales: str | None = Field(default=None)
+    model_technical: str | None = Field(default=None)
     llm_temperature: float | None = Field(
         default=None,
         ge=0.0,
@@ -102,6 +106,39 @@ class Settings(BaseSettings):
         default=3, ge=0,
         description="Months until modules reach full effect (linear ramp).",
     )
+
+    # --- RAG -----------------------------------------------------------------
+    rag_backend: Literal["memory", "pgvector"] = Field(
+        default="memory",
+        description="Vector store adapter: in-process (persisted to disk) or PostgreSQL+pgvector.",
+    )
+    pg_dsn: str | None = Field(
+        default=None,
+        description="PostgreSQL DSN for the pgvector backend, e.g. postgresql://user:pass@host/db.",
+    )
+    rag_pg_index: Literal["hnsw", "ivfflat"] = Field(
+        default="hnsw",
+        description="ANN index type for pgvector (HNSW: better recall; IVFFlat: cheaper build).",
+    )
+    embedding_provider: Literal["hashing", "openai"] = Field(
+        default="hashing",
+        description="'hashing' = deterministic local BoW embedder (offline); 'openai' = API embeddings.",
+    )
+    embedding_model: str = Field(default="text-embedding-3-small")
+    rag_top_k: int = Field(default=5, ge=1)
+    rag_candidates: int = Field(default=20, ge=1, description="Candidate pool before reranking.")
+    rag_hybrid: bool = Field(default=True, description="Fuse vector + keyword search (RRF).")
+    rag_context_char_budget: int = Field(default=4000, ge=500)
+
+    # --- Voice -----------------------------------------------------------------
+    voice_provider: Literal["simulated", "openai"] = Field(
+        default="simulated",
+        description="'simulated' = offline STT/TTS adapters (timing-accurate); 'openai' = Whisper + TTS APIs.",
+    )
+    stt_model: str = Field(default="whisper-1")
+    tts_model: str = Field(default="tts-1")
+    tts_voice: str = Field(default="alloy")
+    voice_sample_rate: int = Field(default=16000)
 
     # --- Prompts ---------------------------------------------------------
     prompt_version: str = Field(
@@ -172,6 +209,22 @@ class Settings(BaseSettings):
     @property
     def memory_json(self) -> Path:
         return self.data_dir / "memory.json"
+
+    @property
+    def knowledge_docs_dir(self) -> Path:
+        return self.project_root / "knowledge_docs"
+
+    @property
+    def vector_index_path(self) -> Path:
+        return self.data_dir / "vector_index.json"
+
+    @property
+    def conversations_path(self) -> Path:
+        return self.data_dir / "conversations.json"
+
+    @property
+    def notifications_outbox(self) -> Path:
+        return self.data_dir / "notifications.jsonl"
 
     @property
     def sqlite_db(self) -> Path:

@@ -19,6 +19,12 @@ from dataclasses import dataclass
 from config.settings import Settings
 from core.cache import InMemoryTTLCache
 from core.logging import get_logger
+from channels.local_api import LocalApiChannel
+from conversation.intents import RuleBasedIntentClassifier
+from conversation.llm import StreamingConversationLLM
+from conversation.memory import JsonConversationStore
+from conversation.router import AgentRouter
+from conversation.runtime import ConversationRuntime
 from crew.agents import AgentFactory
 from crew.crew import PalomaPipeline
 from crew.prompts import PromptRepository
@@ -31,9 +37,16 @@ from events.events import DomainEvent
 from events.handlers import AuditLogHandler
 from llm.routing import LLMRouter
 from models.offer import RoiAssumptions
+from rag.chunking import ChunkingService
+from rag.context_builder import ContextBuilder
+from rag.embeddings import EmbeddingPort, HashingEmbedder, OpenAIEmbedder
+from rag.ingestion import IngestionService
+from rag.retrieval import RerankerService, RetrievalService
+from rag.vector_store import InMemoryVectorStore, PgVectorStore, VectorStorePort
 from services.crm_service import CrmService
 from services.knowledge_service import KnowledgeService
 from services.memory_service import BusinessMemoryService, JsonMemoryRepository
+from services.notification_service import NotificationService
 from services.offer_service import InMemoryOfferRepository, OfferService
 from services.report_service import ReportService
 from services.restaurant_service import (
@@ -44,6 +57,11 @@ from services.restaurant_service import (
     SqliteMetricsRepository,
 )
 from tools.registry import ToolRegistry
+from voice.gateway import VoiceGateway
+from voice.interruption import InterruptionController
+from voice.pipeline import VoicePipeline
+from voice.stt import OpenAIWhisperStt, ScriptedStt, SttPort
+from voice.tts import OpenAITts, SimulatedTts, TtsPort
 
 logger = get_logger("core.container")
 
@@ -61,6 +79,13 @@ class Container:
     memory_service: BusinessMemoryService | None
     event_bus: InMemoryEventBus
     pipeline: PalomaPipeline
+    # AI Operations Platform subsystems
+    ingestion_service: IngestionService
+    retrieval_service: RetrievalService
+    context_builder: ContextBuilder
+    conversation_runtime: ConversationRuntime
+    notification_service: NotificationService
+    voice_gateway: VoiceGateway
 
     @classmethod
     def build(cls, settings: Settings) -> "Container":
@@ -88,6 +113,43 @@ class Container:
         memory_service: BusinessMemoryService | None = None
         if settings.use_business_memory:
             memory_service = BusinessMemoryService(JsonMemoryRepository(settings.memory_json))
+
+        # --- RAG subsystem ---------------------------------------------------
+        # Ports: EmbeddingPort + VectorStorePort. The LLM layer only ever
+        # sees rendered ContextPackages — pgvector stays an infra detail.
+        embedder: EmbeddingPort
+        if settings.embedding_provider == "openai":
+            embedder = OpenAIEmbedder(settings)
+        else:
+            embedder = HashingEmbedder()
+        vector_store: VectorStorePort
+        if settings.rag_backend == "pgvector":
+            if not settings.pg_dsn:
+                from core.exceptions import ConfigurationError
+
+                raise ConfigurationError("RAG_BACKEND=pgvector requires PG_DSN in .env")
+            vector_store = PgVectorStore(
+                dsn=settings.pg_dsn,
+                dimension=embedder.dimension,
+                index_kind=settings.rag_pg_index,
+            )
+        else:
+            vector_store = InMemoryVectorStore(persist_path=settings.vector_index_path)
+        retrieval_service = RetrievalService(
+            embedder=embedder,
+            store=vector_store,
+            reranker=RerankerService(),
+            top_k=settings.rag_top_k,
+            candidate_pool=settings.rag_candidates,
+            hybrid=settings.rag_hybrid,
+        )
+        context_builder = ContextBuilder(
+            retrieval_service, char_budget=settings.rag_context_char_budget
+        )
+        ingestion_service = IngestionService(
+            chunking=ChunkingService(), embedder=embedder, store=vector_store
+        )
+        notification_service = NotificationService(settings.notifications_outbox)
 
         # --- Deterministic engines ----------------------------------------
         # One thresholds instance shared by the rule engine AND the analytics
@@ -129,6 +191,10 @@ class Container:
             "validator_engine": validator_engine,
             "thresholds": thresholds,
         }
+        conversation_store = JsonConversationStore(settings.conversations_path)
+        dependencies["context_builder"] = context_builder
+        dependencies["conversation_store"] = conversation_store
+        dependencies["notification_service"] = notification_service
         if memory_service is not None:
             dependencies["memory_service"] = memory_service
         registry = ToolRegistry().discover()
@@ -156,6 +222,38 @@ class Container:
             event_bus=event_bus,
         )
 
+        # --- Conversation Runtime (channel-agnostic core) ---------------------
+        conversation_runtime = ConversationRuntime(
+            store=conversation_store,
+            classifier=RuleBasedIntentClassifier(),
+            router=AgentRouter(),
+            llm=StreamingConversationLLM(settings, llm_router),
+            prompts=prompts,
+            context_builder=context_builder,
+            restaurant_service=restaurant_service,
+            event_bus=event_bus,
+        )
+
+        # --- Voice Platform (voice is just another channel) -------------------
+        stt: SttPort
+        tts: TtsPort
+        if settings.voice_provider == "openai":
+            stt = OpenAIWhisperStt(settings)
+            tts = OpenAITts(settings)
+        else:
+            # Timing-accurate offline adapters: the pipeline, VAD and
+            # interruption machinery run for real; only acoustics are simulated.
+            stt = ScriptedStt(transcripts=[])
+            tts = SimulatedTts()
+        voice_pipeline = VoicePipeline(
+            stt=stt,
+            tts=tts,
+            interruption=InterruptionController(),
+            channel=LocalApiChannel(conversation_runtime),
+            event_bus=event_bus,
+        )
+        voice_gateway = VoiceGateway(voice_pipeline)
+
         logger.info("Container ready")
         return cls(
             settings=settings,
@@ -167,4 +265,10 @@ class Container:
             memory_service=memory_service,
             event_bus=event_bus,
             pipeline=pipeline,
+            ingestion_service=ingestion_service,
+            retrieval_service=retrieval_service,
+            context_builder=context_builder,
+            conversation_runtime=conversation_runtime,
+            notification_service=notification_service,
+            voice_gateway=voice_gateway,
         )

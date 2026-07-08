@@ -27,6 +27,24 @@
           "KITCHEN_OVERLOAD",
           "SLOW_KITCHEN"
         ]
+      },
+      {
+        "analyzed_at": "2026-07-06T12:01:25.233429Z",
+        "headline": "Dastarkhan Lounge: near-absent delivery channel and weak retention compounded by kitchen overload and slow ticket times",
+        "problem_categories": [
+          "LOW_DELIVERY_SHARE",
+          "LOW_RETENTION",
+          "SLOW_KITCHEN",
+          "KITCHEN_OVERLOAD"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-06T17:50:34.365783Z",
+        "headline": "Dastarkhan Lounge: 2 problem(s) identified by the deterministic rule engine.",
+        "problem_categories": [
+          "LOW_DELIVERY_SHARE",
+          "SLOW_KITCHEN"
+        ]
       }
     ],
     "offers": [
@@ -58,6 +76,30 @@
       {
         "offer_id": "OF-17489823",
         "offered_at": "2026-07-06T11:57:25.690260Z",
+        "module_codes": [
+          "DELIVERY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 299.12,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-B585A3C9",
+        "offered_at": "2026-07-06T12:01:21.849237Z",
+        "module_codes": [
+          "DELIVERY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 299.12,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-4F589439",
+        "offered_at": "2026-07-06T17:50:31.337306Z",
         "module_codes": [
           "DELIVERY",
           "KITCHEN_DISPLAY"
@@ -138,6 +180,26 @@
           "KITCHEN_OVERLOAD",
           "LOW_DELIVERY_SHARE"
         ]
+      },
+      {
+        "analyzed_at": "2026-07-06T12:10:58.643586Z",
+        "headline": "Tandoor Palace Group: retention crisis, overloaded kitchens and slow prep persist despite partial KDS rollout; delivery share still lags benchmark.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "KITCHEN_OVERLOAD",
+          "SLOW_KITCHEN",
+          "LOW_DELIVERY_SHARE"
+        ]
+      },
+      {
+        "analyzed_at": "2026-07-07T04:22:37.490160Z",
+        "headline": "Tandoor Palace Group: retention crisis, kitchen overload and slow prep persist despite partial KDS rollout; delivery share still below target.",
+        "problem_categories": [
+          "LOW_RETENTION",
+          "KITCHEN_OVERLOAD",
+          "SLOW_KITCHEN",
+          "LOW_DELIVERY_SHARE"
+        ]
       }
     ],
     "offers": [
@@ -155,6 +217,32 @@
       {
         "offer_id": "OF-EBEAA923",
         "offered_at": "2026-07-06T11:56:18.088836Z",
+        "module_codes": [
+          "DELIVERY",
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 452.42,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-1BE07A7F",
+        "offered_at": "2026-07-06T12:10:54.825358Z",
+        "module_codes": [
+          "DELIVERY",
+          "CRM_LOYALTY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 452.42,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-32D678CF",
+        "offered_at": "2026-07-07T04:22:33.984932Z",
         "module_codes": [
           "DELIVERY",
           "CRM_LOYALTY",

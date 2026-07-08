@@ -47,8 +47,11 @@ class PromptRepository:
                 f"No prompt files found for agent '{agent}' in {self._prompts_dir} "
                 f"(expected e.g. '{agent}_v1.md')"
             )
-        logger.warning(
-            "Prompt %s_v%s.md not found; falling back to %s", agent, self._version, fallback.name
+        # Per-agent versions may lag the global PROMPT_VERSION — expected,
+        # so this is debug-level, not a warning (e.g. conversational agents
+        # start at v1 while pipeline agents are on v3).
+        logger.debug(
+            "Prompt %s_v%s.md not found; using %s", agent, self._version, fallback.name
         )
         return fallback.read_text(encoding="utf-8")
 

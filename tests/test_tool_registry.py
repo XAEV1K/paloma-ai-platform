@@ -14,7 +14,13 @@ from services.crm_service import CrmService
 from services.knowledge_service import KnowledgeService
 from services.memory_service import BusinessMemoryService, JsonMemoryRepository
 from services.offer_service import InMemoryOfferRepository, OfferService
+from services.notification_service import NotificationService
 from services.restaurant_service import CsvMetricsRepository, RestaurantService
+from conversation.memory import InMemoryConversationStore
+from rag.context_builder import ContextBuilder
+from rag.embeddings import HashingEmbedder
+from rag.retrieval import RerankerService, RetrievalService
+from rag.vector_store import InMemoryVectorStore
 from tools.registry import ToolRegistry
 
 EXPECTED_TOOLS = {
@@ -26,6 +32,9 @@ EXPECTED_TOOLS = {
     "offer_generator",
     "offer_validation",
     "business_memory",
+    "knowledge_search",
+    "conversation_history",
+    "send_notification",
 }
 
 
@@ -43,7 +52,17 @@ def _dependencies(settings: Settings, tmp_path) -> dict[str, object]:
         "validator_engine": ValidatorEngine(),
         "thresholds": RecommendationThresholds(),
         "memory_service": BusinessMemoryService(JsonMemoryRepository(tmp_path / "memory.json")),
+        "context_builder": _context_builder(),
+        "conversation_store": InMemoryConversationStore(),
+        "notification_service": NotificationService(tmp_path / "outbox.jsonl"),
     }
+
+
+def _context_builder() -> ContextBuilder:
+    embedder = HashingEmbedder()
+    return ContextBuilder(
+        RetrievalService(embedder, InMemoryVectorStore(), RerankerService(), top_k=3)
+    )
 
 
 def test_discovery_finds_all_tools() -> None:

@@ -1,0 +1,74 @@
+{
+  "ask-4d6ea81b": {
+    "conversation_id": "ask-4d6ea81b",
+    "channel": "api",
+    "restaurant_id": null,
+    "turns": [
+      {
+        "role": "user",
+        "content": "Delivery orders are not appearing in the kitchen queue, what should I check first?",
+        "at": "2026-07-08T09:57:44.209032Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "First, check the aggregator connection status in Settings, Integrations. A red badge indicates that the marketplace token has expired and needs re-authorisation. This is the most common cause for delivery orders not appearing in the kitchen queue ([S1]).",
+        "at": "2026-07-08T09:57:44.209032Z",
+        "agent_role": "support",
+        "interrupted": false
+      }
+    ],
+    "started_at": "2026-07-08T09:57:41.218041Z"
+  },
+  "call-af4b6966": {
+    "conversation_id": "call-af4b6966",
+    "channel": "api",
+    "restaurant_id": null,
+    "turns": [
+      {
+        "role": "user",
+        "content": "Hi! Delivery orders are not showing up in our kitchen queue.",
+        "at": "2026-07-08T09:58:07.880515Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Let's troubleshoot this issue step by step. \n\n1. First, check the aggregator connection status in Settings, Integrations. A red badge indicates that the marketplace token has expired and needs re-authorisation.\n2. Next, verify that your venue is marked \"open\" in the aggregator's own dashboard.\n3. Finally, confirm that the kitchen display terminal is on the same local network as the POS.\n\nMost issues are due to an expired token. Please check these points and let me know what you find.",
+        "at": "2026-07-08T09:58:07.880515Z",
+        "agent_role": "support",
+        "interrupted": false
+      },
+      {
+        "role": "user",
+        "content": "Wait, actually — it says the marketplace token expired, how do I fix that?",
+        "at": "2026-07-08T09:58:10.336452Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "To fix",
+        "at": "2026-07-08T09:58:10.336452Z",
+        "agent_role": "support",
+        "interrupted": true
+      },
+      {
+        "role": "user",
+        "content": "Got it, thanks. And what does the delivery module cost monthly?",
+        "at": "2026-07-08T09:58:12.223405Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "The monthly subscription for the Delivery module is not specified in the provided context. I will confirm the exact price for you. Would you like to proceed with a pilot or demo of the Delivery module in the meantime?",
+        "at": "2026-07-08T09:58:12.223405Z",
+        "agent_role": "sales",
+        "interrupted": false
+      }
+    ],
+    "started_at": "2026-07-08T09:58:04.408305Z"
+  }
+}

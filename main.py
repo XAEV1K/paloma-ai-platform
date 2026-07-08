@@ -57,8 +57,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="paloma-ai-platform",
         description=(
-            "Paloma365 AI Decision Platform — agentic analysis, ROI-backed module "
-            "recommendations and validated commercial proposals for restaurants."
+            "Paloma365 AI Operations Platform — one AI core, many scenarios: "
+            "business analysis with validated ROI proposals, RAG-grounded support "
+            "and sales conversations, and a voice channel with interruption handling."
         ),
         epilog=_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -76,6 +77,26 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "and auto-open the HTML proposal.",
     )
     parser.add_argument(
+        "--ingest",
+        action="store_true",
+        help="(Re)index the knowledge base: knowledge_docs/ -> chunks -> embeddings -> vector store.",
+    )
+    parser.add_argument(
+        "--ask",
+        metavar="QUESTION",
+        help="One-shot grounded answer from the Support Agent (RAG + streaming).",
+    )
+    parser.add_argument(
+        "--chat",
+        action="store_true",
+        help="Interactive multi-agent chat (support/sales/analyst/technical routing).",
+    )
+    parser.add_argument(
+        "--voice-demo",
+        action="store_true",
+        help="Scripted voice call through the full pipeline, including barge-in interruption.",
+    )
+    parser.add_argument(
         "--open-report",
         action="store_true",
         help="Open the HTML proposal in the default browser after the run.",
@@ -89,9 +110,120 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     args = parser.parse_args(argv)
 
-    if not (args.restaurant_id or args.list_restaurants or args.demo):
-        parser.error("choose one of: --restaurant-id ID, --demo, --list-restaurants")
+    modes = (
+        args.restaurant_id,
+        args.list_restaurants,
+        args.demo,
+        args.ingest,
+        args.ask,
+        args.chat,
+        args.voice_demo,
+    )
+    if not any(modes):
+        parser.error(
+            "choose one of: --restaurant-id ID, --demo, --chat, --ask QUESTION, "
+            "--ingest, --voice-demo, --list-restaurants"
+        )
     return args
+
+
+def _run_ingest(container: Container) -> int:
+    """Reindex the knowledge base and print the ingestion report."""
+    report = container.ingestion_service.ingest_directory(
+        container.settings.knowledge_docs_dir
+    )
+    from events.events import KnowledgeIngested
+
+    container.event_bus.publish(
+        KnowledgeIngested(
+            request_id="ingest",
+            files=report.files,
+            chunks=report.chunks,
+            duration_ms=report.duration_ms,
+        )
+    )
+    print()
+    print("─" * 60)
+    print("  Knowledge base indexed")
+    print(f"    files    : {report.files}")
+    print(f"    chunks   : {report.chunks}")
+    print(f"    duration : {report.duration_ms:.0f}ms")
+    if report.skipped:
+        print(f"    skipped  : {', '.join(report.skipped)}")
+    print("─" * 60)
+    return 0
+
+
+def _run_ask(container: Container, question: str) -> int:
+    """One-shot grounded answer with full retrieval observability."""
+    import uuid
+
+    print("\nai > ", end="", flush=True)
+    result = container.conversation_runtime.process_turn(
+        conversation_id=f"ask-{uuid.uuid4().hex[:8]}",
+        user_text=question,
+        channel="api",
+        on_token=lambda token: print(token, end="", flush=True),
+    )
+    print("\n")
+    print("─" * 60)
+    print(f"  agent   : {result.agent_display_name} (intent {result.intent})")
+    print(f"  latency : {result.latency_ms / 1000:.1f}s")
+    if result.context is not None:
+        metrics = result.context.metrics
+        print(
+            f"  retrieval: {metrics.total_ms:.0f}ms "
+            f"(embed {metrics.embedding_ms:.0f} / search {metrics.search_ms:.0f} "
+            f"/ rerank {metrics.rerank_ms:.0f}), "
+            f"{metrics.returned}/{metrics.candidates} chunk(s)"
+        )
+        for position, item in enumerate(result.context.chunks, start=1):
+            heading = item.chunk.metadata.get("heading", "")
+            print(
+                f"    [S{position}] {item.chunk.source} · {heading} · "
+                f"score {item.score:.3f} ({'+'.join(item.channels)})"
+            )
+    else:
+        print("  retrieval: none (run --ingest first to index knowledge_docs/)")
+    print("─" * 60)
+    return 0
+
+
+def _run_voice_demo(container: Container) -> int:
+    """Scripted call through the full voice pipeline, with barge-in."""
+    from channels.local_api import LocalApiChannel
+    from voice.gateway import ScriptedCall, ScriptedUtterance, VoiceGateway
+    from voice.interruption import InterruptionController
+    from voice.pipeline import VoicePipeline
+    from voice.stt import ScriptedStt
+    from voice.tts import SimulatedTts
+
+    script = ScriptedCall(
+        utterances=[
+            ScriptedUtterance(text="Hi! Delivery orders are not showing up in our kitchen queue."),
+            ScriptedUtterance(
+                text="Wait, actually — it says the marketplace token expired, how do I fix that?",
+                barge_in_after_frames=120,  # caller barges in ~6 words into the reply
+            ),
+            ScriptedUtterance(text="Got it, thanks. And what does the delivery module cost monthly?"),
+        ]
+    )
+    pipeline = VoicePipeline(
+        stt=ScriptedStt([utterance.text for utterance in script.utterances]),
+        tts=SimulatedTts(),
+        interruption=InterruptionController(),
+        channel=LocalApiChannel(container.conversation_runtime),
+        event_bus=container.event_bus,
+    )
+    session = VoiceGateway(pipeline).run_scripted_call(script)
+    print()
+    print(session.timeline())
+    print(
+        f"\n  {len(script.utterances)} utterance(s), "
+        f"{session.interruptions} interruption(s) — conversation memory reflects "
+        f"exactly what the caller heard."
+    )
+    return 0
 
 
 def _print_failure(message: str) -> None:
@@ -129,6 +261,17 @@ def main(argv: list[str] | None = None) -> int:
             for rid in container.restaurant_service.list_restaurants():
                 print(rid)
             return 0
+
+        if args.ingest:
+            return _run_ingest(container)
+        if args.ask:
+            return _run_ask(container, args.ask)
+        if args.chat:
+            from channels.chat_cli import ChatCliChannel
+
+            return ChatCliChannel(container.conversation_runtime).run()
+        if args.voice_demo:
+            return _run_voice_demo(container)
 
         # Fail fast on credentials for every model in the routing table —
         # before the first agent runs, not in the middle of a demo.

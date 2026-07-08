@@ -57,3 +57,28 @@ class ReportGenerated(DomainEvent):
     restaurant_id: str
     offer_id: str
     report_path: str
+
+
+class ConversationTurnCompleted(DomainEvent):
+    """The conversation runtime finished one turn on any channel."""
+
+    conversation_id: str
+    channel: str
+    intent: str
+    agent_role: str
+    latency_ms: float
+
+
+class KnowledgeIngested(DomainEvent):
+    """The ingestion pipeline (re)indexed part of the knowledge base."""
+
+    files: int
+    chunks: int
+    duration_ms: float
+
+
+class VoiceInterruptionOccurred(DomainEvent):
+    """A caller barged in while TTS was playing (voice channel)."""
+
+    conversation_id: str
+    spoken_chars: int

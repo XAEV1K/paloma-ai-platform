@@ -1,8 +1,70 @@
-# Paloma AI Platform
+# Paloma AI Operations Platform
 
-**Agentic decision-support platform for restaurant businesses, built on Paloma365 data.**
+**The AI core of a restaurant SaaS: one runtime, many scenarios — business
+analysis, support, sales, voice and reporting on shared infrastructure.**
+
+```
+                 Web Chat        Voice        API      (WhatsApp / Telegram — adapters)
+                     └──────────────┼───────────┘
+                          Channel Adapters (channels/)
+                                    │
+                        Conversation Runtime (conversation/)
+              history · memory · intent routing · streaming · trace
+                                    │
+        ┌───────────────┬───────────┴──────────┬────────────────────┐
+   Support Agent   Sales Agent         Business Analyst      Decision Pipeline
+   (RAG-grounded)  (RAG + business)    (metrics-grounded)    (CrewAI: analyst →
+        │               │                     │               report → validator)
+        └───────────────┴──────────┬──────────┘
+                          Tool & Service Layer
+        RAG (ingestion→chunks→embeddings→vector store→retrieval→context)
+        analytics · ROI · CRM · business memory · notifications (outbox)
+                                    │
+                          AI Runtime (core/, metrics/, events/)
+        execution context · tracing · cost · event bus · caching · DI
+```
 
 `python 3.12+` · `crewai 1.x` · `pydantic v2` · **prompt version: v3** · multi-model routing (OpenAI / Anthropic / Gemini / OpenRouter / Ollama)
+
+## Platform Scenarios
+
+| Scenario | Entry point | What runs underneath |
+|---|---|---|
+| AI Business Analyst | `python main.py --restaurant-id R-001` | CrewAI decision pipeline → validated ROI proposal (MD + HTML) |
+| AI Support | `python main.py --ask "..."` / `--chat` | Conversation Runtime + RAG grounding with citations |
+| AI Sales | `--chat` (intent-routed) | Same runtime, sales prompt + business metrics + knowledge prices |
+| AI Voice Assistant | `python main.py --voice-demo` | STT → runtime → streaming TTS with barge-in interruption |
+| Knowledge Ops | `python main.py --ingest` | Ingestion pipeline: files → chunks → embeddings → vector store |
+
+## RAG Platform
+
+A self-contained subsystem (`rag/`), not a "chat with PDF" feature:
+
+```
+PDF / DOCX / Markdown / HTML  ──►  parsers  ──►  ChunkingService (heading-aware,
+overlapped)  ──►  EmbeddingPort  ──►  VectorStorePort  ──►  RetrievalService
+(hybrid: vector + keyword, RRF fusion)  ──►  Reranker  ──►  ContextBuilder
+(dedupe, char budget, [S1] citations)  ──►  ContextPackage  ──►  LLM
+```
+
+- **PostgreSQL + pgvector** is the production backend (`RAG_BACKEND=pgvector`):
+  one database next to the CRM, HNSW or IVFFlat ANN indexes, `tsvector`
+  keyword channel — the adapter owns its schema. The default in-process
+  backend (exact cosine over numpy, JSON-persisted) runs the identical
+  pipeline offline; at demo corpus sizes exact search *is* production-grade.
+- **The LLM never sees the vector store.** Agents receive a rendered
+  `ContextPackage` with source markers; every retrieval reports embedding /
+  search / rerank timings.
+
+## Voice Platform
+
+Voice is *just another channel* (`voice/`): energy VAD with hangover
+smoothing, STT/TTS ports (OpenAI adapters + timing-accurate simulated
+adapters), and first-class **interruption handling** — TTS chunks carry the
+exact words they voice, so a barge-in stops playback between frames (~20ms
+reaction), rewrites conversation memory to what the caller actually heard,
+and publishes a domain event. `--voice-demo` drives a scripted call through
+the full production path and prints the Voice Timeline.
 
 ## Features
 
