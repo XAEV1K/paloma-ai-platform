@@ -22,6 +22,7 @@ from crewai import Crew, Process, Task
 from crewai.tools import BaseTool
 
 from config.settings import Settings
+from core.capabilities import Capability, CapabilityRegistry
 from core.context import ExecutionContext, execution_scope
 from core.exceptions import (
     AgentContractError,
@@ -56,18 +57,22 @@ from services.restaurant_service import RestaurantService
 
 logger = get_logger("crew.pipeline")
 
-#: Tool belts per agent role (least privilege). Names refer to registry keys —
-#: adding a tool to an agent is one string here, not an import.
-ARCHITECT_TOOLS: tuple[str, ...] = ("restaurant_analytics", "crm_insights")
-DEVELOPER_TOOLS: tuple[str, ...] = (
-    "module_recommendations",
-    "paloma365_knowledge",
-    "roi_calculator",
-    "offer_generator",
+#: Capability grants per pipeline role (least privilege). Services are
+#: granted *capabilities*; the CapabilityRegistry resolves them to whatever
+#: tools currently provide them — implementations swap without touching this.
+ARCHITECT_CAPABILITIES: tuple[Capability, ...] = (
+    Capability.RESTAURANT_METRICS,
+    Capability.CRM_INSIGHTS,
 )
-VALIDATOR_TOOLS: tuple[str, ...] = ("offer_validation",)
-#: Added to Architect + Developer belts when USE_BUSINESS_MEMORY is on.
-MEMORY_TOOL: str = "business_memory"
+DEVELOPER_CAPABILITIES: tuple[Capability, ...] = (
+    Capability.RECOMMENDATIONS,
+    Capability.MODULE_CATALOG,
+    Capability.ROI_PROJECTION,
+    Capability.OFFER_GENERATION,
+)
+VALIDATOR_CAPABILITIES: tuple[Capability, ...] = (Capability.OFFER_VALIDATION,)
+#: Granted to Architect + Developer when USE_BUSINESS_MEMORY is on.
+MEMORY_CAPABILITY: Capability = Capability.BUSINESS_MEMORY
 
 #: Evidence mapping for the deterministic fallback diagnosis:
 #: problem category -> (RestaurantMetrics attribute, RecommendationThresholds attribute).
@@ -203,16 +208,17 @@ class PalomaPipeline:
     def _build_crew(self, context: ExecutionContext) -> Crew:
         """Assemble agents with role-scoped tool belts and sequential tasks."""
         memory_extra = (
-            (MEMORY_TOOL,)
-            if self._settings.use_business_memory and MEMORY_TOOL in self._tools
+            (MEMORY_CAPABILITY,)
+            if self._settings.use_business_memory and "business_memory" in self._tools
             else ()
         )
+        capabilities = CapabilityRegistry(self._tools)
 
         architect = self._agent_factory.architect(
-            tools=self._belt(ARCHITECT_TOOLS + memory_extra)
+            tools=capabilities.resolve(ARCHITECT_CAPABILITIES + memory_extra)
         )
         developer = self._agent_factory.developer(
-            tools=self._belt(DEVELOPER_TOOLS + memory_extra)
+            tools=capabilities.resolve(DEVELOPER_CAPABILITIES + memory_extra)
         )
 
         analysis = self._task_factory.analysis_task(
@@ -226,7 +232,9 @@ class PalomaPipeline:
         tasks: list[Task] = [analysis, development]
 
         if self._settings.use_validator_agent:
-            validator = self._agent_factory.validator(tools=self._belt(VALIDATOR_TOOLS))
+            validator = self._agent_factory.validator(
+                tools=capabilities.resolve(VALIDATOR_CAPABILITIES)
+            )
             validation = self._task_factory.validation_task(
                 validator, context=[development], callback=self._on_validation_done(context)
             )
@@ -236,13 +244,6 @@ class PalomaPipeline:
             logger.info("Validator agent disabled by flag; ValidatorEngine will run directly")
 
         return Crew(agents=agents, tasks=tasks, process=Process.sequential)
-
-    def _belt(self, names: tuple[str, ...]) -> list[BaseTool]:
-        """Resolve a tool belt from registry names, failing fast on typos."""
-        missing = [name for name in names if name not in self._tools]
-        if missing:
-            raise ConfigurationError(f"Unknown tool(s) in agent belt: {missing}")
-        return [self._tools[name] for name in names]
 
     # ------------------------------------------------------------------
     # stage callbacks: trace marks + event publishing

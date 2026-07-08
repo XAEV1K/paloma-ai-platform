@@ -26,10 +26,71 @@ analysis, support, sales, voice and reporting on shared infrastructure.**
 
 `python 3.12+` · `crewai 1.x` · `pydantic v2` · **prompt version: v3** · multi-model routing (OpenAI / Anthropic / Gemini / OpenRouter / Ollama)
 
+## The AI Runtime
+
+The platform is not a library you call — it is a runtime you **boot**.
+`python main.py --status` connects every subsystem and shows the live
+status board:
+
+```
+⏻ Paloma AI Runtime · booting
+  ✓ Restaurant data connected    6 venue(s) connected
+  ✓ Knowledge synced             22 chunk(s) indexed
+  ✓ CRM sync ready               bitrix (simulated): 4 webhook(s) pending
+  ✓ Memory fabric online         5 domains: Business, Conversation, Customer, Knowledge, Restaurant
+  ✓ AI services registered       support · sales · analyst · technical (12 capabilities)
+  ✓ Voice ready                  simulated adapters · barge-in enabled
+  ✓ Scheduler armed              4 job(s): crm-sync, knowledge-reindex, daily-analytics, health-snapshot
+  Platform ready in 0.01s
+```
+
+- **AI Runtime Services** (not "agents"): support, sales, analyst and
+  technical services own conversations; the decision pipeline produces
+  validated proposals. All of them are granted **capabilities** — the
+  `CapabilityRegistry` resolves each grant (Knowledge Search, CRM,
+  Notifications, ROI, ...) to whatever tools currently provide it.
+- **CRM Sync** (`crm_sync/`): Bitrix webhooks → vendor normalizer →
+  internal events → event bus → Customer Memory. Deterministic Python end
+  to end; the simulated connector replays realistic payloads from
+  `data/crm_inbox.json`, a live webhook receiver implements the same port.
+- **Memory Fabric**: five domains behind one facade — Knowledge,
+  Conversation, Business, Restaurant and Customer memory — each with its
+  own store and lifetime.
+- **Scheduler** (`scheduler/`): the platform heartbeat. `--maintenance`
+  forces the nightly cycle: CRM sync → knowledge reindex (embeddings
+  refreshed) → daily analytics report → health snapshot. Job faults are
+  isolated; every cycle publishes an event.
+- **Health Monitor**: `--status` probes every subsystem with latency
+  (knowledge index, embeddings, retrieval, stores, CRM connector, voice,
+  LLM routing) and renders the OK/DEGRADED/FAIL board.
+
+## Plugin SDK
+
+A third-party capability is one file in `plugins/`:
+
+```python
+from tools.base import InstrumentedTool, register_tool
+
+@register_tool
+class LoyaltyInsightsTool(InstrumentedTool):
+    name: str = "loyalty_insights"
+    description: str = "..."
+    args_schema: type[BaseModel] = LoyaltyInsightsInput
+    memory_service: BusinessMemoryService  # injected by the composition root
+
+    def _execute(self, restaurant_id: str) -> str: ...
+```
+
+Discovery, dependency injection, instrumentation (timing, tracing,
+metrics) and capability mapping are automatic — see the shipped, working
+example [plugins/loyalty_insights.py](plugins/loyalty_insights.py).
+
 ## Platform Scenarios
 
 | Scenario | Entry point | What runs underneath |
 |---|---|---|
+| Platform status | `python main.py --status` | Runtime boot + health board + memory fabric + capabilities |
+| Maintenance cycle | `python main.py --maintenance` | CRM sync → knowledge reindex → daily analytics → health snapshot |
 | AI Business Analyst | `python main.py --restaurant-id R-001` | CrewAI decision pipeline → validated ROI proposal (MD + HTML) |
 | AI Support | `python main.py --ask "..."` / `--chat` | Conversation Runtime + RAG grounding with citations |
 | AI Sales | `--chat` (intent-routed) | Same runtime, sales prompt + business metrics + knowledge prices |

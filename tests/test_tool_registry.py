@@ -121,10 +121,11 @@ def test_optional_tool_is_skipped_when_deps_missing(settings: Settings, tmp_path
     del dependencies["memory_service"]
 
     tools = ToolRegistry().discover().create_all(
-        dependencies, optional=frozenset({"business_memory"})
+        dependencies, optional=frozenset({"business_memory", "loyalty_insights"})
     )
 
     assert "business_memory" not in tools
+    assert "loyalty_insights" not in tools  # plugin building on the flagged service
     assert "restaurant_analytics" in tools
 
 

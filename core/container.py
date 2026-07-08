@@ -18,8 +18,18 @@ from dataclasses import dataclass
 
 from config.settings import Settings
 from core.cache import InMemoryTTLCache
+from core.capabilities import CapabilityRegistry
+from core.health import DegradedError, HealthMonitor
 from core.logging import get_logger
+from core.runtime import PlatformRuntime
 from channels.local_api import LocalApiChannel
+from crm_sync.connector import SimulatedBitrixConnector
+from crm_sync.normalizer import BitrixNormalizer
+from crm_sync.service import CrmSyncService
+from scheduler.jobs import build_platform_jobs
+from scheduler.scheduler import Scheduler
+from services.customer_memory import CustomerMemoryService
+from services.memory_fabric import MemoryFabric
 from conversation.intents import RuleBasedIntentClassifier
 from conversation.llm import StreamingConversationLLM
 from conversation.memory import JsonConversationStore
@@ -86,6 +96,14 @@ class Container:
     conversation_runtime: ConversationRuntime
     notification_service: NotificationService
     voice_gateway: VoiceGateway
+    # AI Runtime (the product-level lifecycle layer)
+    capabilities: CapabilityRegistry
+    customer_memory: CustomerMemoryService
+    crm_sync_service: CrmSyncService
+    memory_fabric: MemoryFabric
+    scheduler: Scheduler
+    health_monitor: HealthMonitor
+    platform_runtime: PlatformRuntime
 
     @classmethod
     def build(cls, settings: Settings) -> "Container":
@@ -198,8 +216,11 @@ class Container:
         if memory_service is not None:
             dependencies["memory_service"] = memory_service
         registry = ToolRegistry().discover()
-        # business_memory is feature-flagged: skip it (not fail) when disabled.
-        tools = registry.create_all(dependencies, optional=frozenset({"business_memory"}))
+        # Tools depending on the feature-flagged business memory are skipped
+        # (not failed) when the flag is off — including plugins that build on it.
+        tools = registry.create_all(
+            dependencies, optional=frozenset({"business_memory", "loyalty_insights"})
+        )
 
         # --- LLM & orchestration --------------------------------------------
         # The router resolves models per role and builds LLM handles lazily:
@@ -254,6 +275,85 @@ class Container:
         )
         voice_gateway = VoiceGateway(voice_pipeline)
 
+        # --- AI Runtime: capabilities, CRM sync, memory fabric ----------------
+        capabilities = CapabilityRegistry(tools)
+        customer_memory = CustomerMemoryService(settings.customers_path)
+        crm_sync_service = CrmSyncService(
+            connector=SimulatedBitrixConnector(settings.crm_inbox_path),
+            normalizer=BitrixNormalizer(),
+            customer_memory=customer_memory,
+            event_bus=event_bus,
+        )
+        memory_fabric = MemoryFabric(
+            vector_store=vector_store,
+            conversation_store=conversation_store,
+            business_memory=memory_service,
+            restaurant_service=restaurant_service,
+            customer_memory=customer_memory,
+        )
+
+        # --- Health Monitor (glue lives in the composition root) --------------
+        health_monitor = HealthMonitor()
+
+        def _knowledge_probe() -> str:
+            count = vector_store.count()
+            if count == 0:
+                raise DegradedError("index empty — run --ingest")
+            return f"{count} chunk(s) indexed"
+
+        def _embedding_probe() -> str:
+            vector = embedder.embed(["health probe"])[0]
+            return f"{settings.embedding_provider} · dim={len(vector)}"
+
+        def _retrieval_probe() -> str:
+            _, metrics = retrieval_service.retrieve("health probe query")
+            return f"hybrid search in {metrics.total_ms:.0f}ms"
+
+        def _llm_probe() -> str:
+            try:
+                llm_router.validate()
+            except Exception as exc:
+                raise DegradedError(f"no credentials ({exc})") from exc
+            return f"{len(llm_router.describe())} role(s) routed"
+
+        def _conversation_probe() -> str:
+            conversation_store.load("__health_probe__")  # exercises the read path
+            return "persistent store online"
+
+        health_monitor.register("Knowledge Index", _knowledge_probe)
+        health_monitor.register("Embedding Service", _embedding_probe)
+        health_monitor.register("Retrieval Engine", _retrieval_probe)
+        health_monitor.register("Conversation Store", _conversation_probe)
+        health_monitor.register(
+            "Customer Memory", lambda: f"{customer_memory.count()} record(s)"
+        )
+        health_monitor.register("CRM Connector", crm_sync_service.handshake)
+        health_monitor.register(
+            "Voice Platform", lambda: f"{settings.voice_provider} adapters ready"
+        )
+        health_monitor.register("LLM Routing", _llm_probe)
+
+        # --- Scheduler: the platform heartbeat ---------------------------------
+        scheduler = Scheduler(event_bus)
+        for job in build_platform_jobs(
+            crm_sync=crm_sync_service,
+            ingestion=ingestion_service,
+            knowledge_dir=settings.knowledge_docs_dir,
+            memory_fabric=memory_fabric,
+            health_monitor=health_monitor,
+            reports_dir=settings.reports_dir,
+        ):
+            scheduler.register(job)
+
+        platform_runtime = PlatformRuntime(
+            memory_fabric=memory_fabric,
+            crm_sync=crm_sync_service,
+            capabilities=capabilities,
+            scheduler=scheduler,
+            event_bus=event_bus,
+            voice_mode=settings.voice_provider,
+        )
+
         logger.info("Container ready")
         return cls(
             settings=settings,
@@ -271,4 +371,11 @@ class Container:
             conversation_runtime=conversation_runtime,
             notification_service=notification_service,
             voice_gateway=voice_gateway,
+            capabilities=capabilities,
+            customer_memory=customer_memory,
+            crm_sync_service=crm_sync_service,
+            memory_fabric=memory_fabric,
+            scheduler=scheduler,
+            health_monitor=health_monitor,
+            platform_runtime=platform_runtime,
         )

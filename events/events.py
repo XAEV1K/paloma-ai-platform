@@ -82,3 +82,27 @@ class VoiceInterruptionOccurred(DomainEvent):
 
     conversation_id: str
     spoken_chars: int
+
+
+class CrmRecordSynced(DomainEvent):
+    """One CRM record landed in customer memory via the sync service."""
+
+    kind: str  # contact | deal
+    action: str  # created | updated
+    record_id: str
+
+
+class MaintenanceRunCompleted(DomainEvent):
+    """The scheduler finished a maintenance cycle."""
+
+    trigger: str  # scheduled | manual
+    jobs_ok: int
+    jobs_failed: int
+    duration_ms: float
+
+
+class PlatformReady(DomainEvent):
+    """The AI Runtime finished its boot sequence."""
+
+    services: list[str]
+    boot_ms: float

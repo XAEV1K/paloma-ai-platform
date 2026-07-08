@@ -27,17 +27,28 @@ _NON_DEPENDENCY_FIELDS: frozenset[str] = frozenset(
 
 
 class ToolRegistry:
-    """Discovers tool plugins and builds them with injected dependencies."""
+    """Discovers tool plugins and builds them with injected dependencies.
 
-    def __init__(self, package: str = "tools") -> None:
-        self._package = package
+    Two source packages by default: ``tools`` (platform capabilities) and
+    ``plugins`` (the Plugin SDK surface — drop a file with a decorated
+    class into ``plugins/`` and it appears on the platform after the next
+    boot, no core edits).
+    """
+
+    def __init__(self, packages: tuple[str, ...] = ("tools", "plugins")) -> None:
+        self._packages = packages
         self._classes: dict[str, type[InstrumentedTool]] = {}
 
     def discover(self) -> "ToolRegistry":
-        """Import every module in the tools package to trigger registration."""
-        package = importlib.import_module(self._package)
-        for module_info in pkgutil.iter_modules(package.__path__):
-            importlib.import_module(f"{self._package}.{module_info.name}")
+        """Import every module in the source packages to trigger registration."""
+        for package_name in self._packages:
+            try:
+                package = importlib.import_module(package_name)
+            except ImportError:
+                logger.debug("Plugin package '%s' absent — skipping", package_name)
+                continue
+            for module_info in pkgutil.iter_modules(package.__path__):
+                importlib.import_module(f"{package_name}.{module_info.name}")
         self._classes = registered_tools()
         logger.info(
             "Tool discovery complete: %d tool(s) registered (%s)",

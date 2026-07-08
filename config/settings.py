@@ -227,6 +227,14 @@ class Settings(BaseSettings):
         return self.data_dir / "notifications.jsonl"
 
     @property
+    def crm_inbox_path(self) -> Path:
+        return self.data_dir / "crm_inbox.json"
+
+    @property
+    def customers_path(self) -> Path:
+        return self.data_dir / "customers.json"
+
+    @property
     def sqlite_db(self) -> Path:
         return self.data_dir / "restaurants.db"
 

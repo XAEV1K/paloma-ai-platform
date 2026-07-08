@@ -1,0 +1,56 @@
+[
+  {
+    "event": "ONCRMCONTACTADD",
+    "data": {
+      "FIELDS": {
+        "ID": "501",
+        "NAME": "Aigerim",
+        "LAST_NAME": "Bekova",
+        "PHONE": [{"VALUE": "+7 701 555 0101", "VALUE_TYPE": "WORK"}],
+        "EMAIL": "aigerim@dastarkhan.kz",
+        "UF_RESTAURANT_ID": "R-001",
+        "UF_TAGS": "owner,decision-maker"
+      }
+    }
+  },
+  {
+    "event": "ONCRMCONTACTADD",
+    "data": {
+      "FIELDS": {
+        "ID": "502",
+        "NAME": "Timur",
+        "LAST_NAME": "Akhmetov",
+        "PHONE": [{"VALUE": "+7 702 555 0202", "VALUE_TYPE": "WORK"}],
+        "EMAIL": "t.akhmetov@tandoorgroup.kz",
+        "UF_RESTAURANT_ID": "R-006",
+        "UF_TAGS": "coo,pilot-sponsor"
+      }
+    }
+  },
+  {
+    "event": "ONCRMDEALADD",
+    "data": {
+      "FIELDS": {
+        "ID": "9001",
+        "TITLE": "Tandoor Group — KDS group-wide rollout",
+        "STAGE_ID": "C1:NEGOTIATION",
+        "OPPORTUNITY": "1026000",
+        "CONTACT_ID": "502",
+        "UF_RESTAURANT_ID": "R-006"
+      }
+    }
+  },
+  {
+    "event": "ONCRMDEALUPDATE",
+    "data": {
+      "FIELDS": {
+        "ID": "9002",
+        "TITLE": "Dastarkhan — Delivery + KDS bundle",
+        "STAGE_ID": "C1:PROPOSAL_SENT",
+        "OPPORTUNITY": "726000",
+        "CONTACT_ID": "501",
+        "UF_RESTAURANT_ID": "R-001"
+      }
+    }
+  }
+]

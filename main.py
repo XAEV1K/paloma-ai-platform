@@ -97,6 +97,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Scripted voice call through the full pipeline, including barge-in interruption.",
     )
     parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Boot the AI Runtime and show the platform status board (health, memory, capabilities).",
+    )
+    parser.add_argument(
+        "--maintenance",
+        action="store_true",
+        help="Run the full maintenance cycle now: CRM sync, knowledge reindex, daily analytics, health snapshot.",
+    )
+    parser.add_argument(
         "--open-report",
         action="store_true",
         help="Open the HTML proposal in the default browser after the run.",
@@ -118,11 +128,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args.ask,
         args.chat,
         args.voice_demo,
+        args.status,
+        args.maintenance,
     )
     if not any(modes):
         parser.error(
             "choose one of: --restaurant-id ID, --demo, --chat, --ask QUESTION, "
-            "--ingest, --voice-demo, --list-restaurants"
+            "--ingest, --voice-demo, --status, --maintenance, --list-restaurants"
         )
     return args
 
@@ -226,6 +238,46 @@ def _run_voice_demo(container: Container) -> int:
     return 0
 
 
+def _run_status(container: Container) -> int:
+    """Boot the runtime and render the platform status board."""
+    from presentation.status import render_boot, render_status_board
+
+    boot = container.platform_runtime.boot()
+    print(render_boot(boot.steps, boot.boot_ms))
+    print()
+
+    from datetime import datetime
+
+    results = container.health_monitor.run()
+    now = datetime.now()
+    scheduler_lines = [
+        f"{job.name:<20} {job.schedule:<12} next {job.next_run(now):%Y-%m-%d %H:%M}"
+        for job in container.scheduler.jobs
+    ]
+    print(
+        render_status_board(
+            results=results,
+            memory_domains=container.memory_fabric.describe(),
+            capabilities=container.capabilities.available(),
+            scheduler_lines=scheduler_lines,
+        )
+    )
+    return 0
+
+
+def _run_maintenance(container: Container) -> int:
+    """Force the nightly maintenance cycle right now."""
+    print("\n⏻ Maintenance cycle · manual trigger\n")
+    report = container.scheduler.run_all()
+    for result in report.results:
+        icon = "✓" if result.ok else "✗"
+        print(f"  {icon} {result.name:<20} {result.duration_ms:6.0f}ms  {result.detail}")
+    print(
+        f"\n  {report.ok} ok · {report.failed} failed · {report.duration_ms:.0f}ms total"
+    )
+    return 0 if report.failed == 0 else 1
+
+
 def _print_failure(message: str) -> None:
     print()
     print("─" * 60)
@@ -266,9 +318,17 @@ def main(argv: list[str] | None = None) -> int:
             return _run_ingest(container)
         if args.ask:
             return _run_ask(container, args.ask)
+        if args.status:
+            return _run_status(container)
+        if args.maintenance:
+            return _run_maintenance(container)
         if args.chat:
             from channels.chat_cli import ChatCliChannel
+            from presentation.status import render_boot
 
+            boot = container.platform_runtime.boot()
+            print(render_boot(boot.steps, boot.boot_ms))
+            print()
             return ChatCliChannel(container.conversation_runtime).run()
         if args.voice_demo:
             return _run_voice_demo(container)

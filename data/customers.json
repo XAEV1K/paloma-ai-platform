@@ -1,0 +1,46 @@
+{
+  "501": {
+    "external_id": "501",
+    "name": "Aigerim Bekova",
+    "phone": "+7 701 555 0101",
+    "email": "aigerim@dastarkhan.kz",
+    "restaurant_id": "R-001",
+    "tags": [
+      "owner",
+      "decision-maker"
+    ],
+    "deals": [
+      {
+        "external_id": "9002",
+        "title": "Dastarkhan — Delivery + KDS bundle",
+        "stage": "PROPOSAL_SENT",
+        "amount": 726000.0,
+        "contact_external_id": "501",
+        "restaurant_id": "R-001"
+      }
+    ],
+    "last_synced": "2026-07-08T17:38:58.466331Z"
+  },
+  "502": {
+    "external_id": "502",
+    "name": "Timur Akhmetov",
+    "phone": "+7 702 555 0202",
+    "email": "t.akhmetov@tandoorgroup.kz",
+    "restaurant_id": "R-006",
+    "tags": [
+      "coo",
+      "pilot-sponsor"
+    ],
+    "deals": [
+      {
+        "external_id": "9001",
+        "title": "Tandoor Group — KDS group-wide rollout",
+        "stage": "NEGOTIATION",
+        "amount": 1026000.0,
+        "contact_external_id": "502",
+        "restaurant_id": "R-006"
+      }
+    ],
+    "last_synced": "2026-07-08T17:38:58.460351Z"
+  }
+}
