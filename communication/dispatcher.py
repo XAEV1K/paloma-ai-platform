@@ -24,14 +24,26 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.context import ExecutionContext, execution_scope
+from core.exceptions import RestaurantNotFoundError
 from core.logging import get_logger
 from conversation.runtime import ConversationRuntime
 from communication.response_builder import ResponseBuilder
 from communication.router import ChannelRouter
-from communication.session import SessionManager
-from communication.transport import InboundMessage
+from communication.session import CommunicationSession, SessionManager
+from communication.transport import InboundMessage, OutboundMessage
+from services.restaurant_service import RestaurantService
 
 logger = get_logger("communication.dispatcher")
+
+_HELP_TEXT = (
+    "Команды платформы:\n"
+    "/restaurant R-001 — привязать ресторан к этому чату\n"
+    "/restaurant — показать текущую привязку\n"
+    "/reset — начать разговор заново\n"
+    "/help — эта справка\n\n"
+    "Просто напишите вопрос — о продуктах Paloma365, поддержке или "
+    "показателях вашего ресторана."
+)
 
 
 class MessageReport(BaseModel):
@@ -84,17 +96,49 @@ class MessageDispatcher:
         runtime: ConversationRuntime,
         response_builder: ResponseBuilder,
         router: ChannelRouter,
+        restaurant_service: RestaurantService,
     ) -> None:
         self._sessions = sessions
         self._runtime = runtime
         self._response_builder = response_builder
         self._router = router
+        self._restaurant_service = restaurant_service
 
     def dispatch(self, inbound: InboundMessage) -> MessageReport:
         """Process one message end to end; never raises into the transport loop."""
         started = time.monotonic()
         transport = self._router.resolve(inbound.channel)
         session = self._sessions.resolve(inbound.channel, inbound.sender_address)
+
+        # Platform commands are channel-agnostic and never reach the LLM:
+        # deterministic, instant, free — and they work identically in
+        # WhatsApp, web chat and any future channel.
+        command_reply = self._handle_command(inbound, session)
+        if command_reply is not None:
+            delivery_id, delivery_ms = self._deliver_safe(
+                transport,
+                OutboundMessage(
+                    channel=inbound.channel,
+                    recipient_address=inbound.sender_address,
+                    text=command_reply,
+                    in_reply_to=inbound.message_id,
+                ),
+            )
+            report = MessageReport(
+                channel=inbound.channel,
+                sender=inbound.sender_address,
+                intent="COMMAND",
+                agent="Platform",
+                restaurant_id=session.restaurant_id,
+                reply_chars=len(command_reply),
+                delivery_ms=delivery_ms,
+                delivery_id=delivery_id,
+                total_ms=round((time.monotonic() - started) * 1000, 1),
+                ok=bool(delivery_id),
+            )
+            logger.info("%s", report.timeline())
+            return report
+
         context = ExecutionContext.new(session.restaurant_id or inbound.channel)
 
         try:
@@ -152,6 +196,54 @@ class MessageDispatcher:
         return report
 
     # ------------------------------------------------------------------
+    def _handle_command(
+        self, inbound: InboundMessage, session: CommunicationSession
+    ) -> str | None:
+        """Execute a platform command; None when the message is not one."""
+        text = inbound.text.strip()
+        if not text.startswith("/"):
+            return None
+        parts = text.split()
+        command = parts[0].lower()
+
+        if command == "/help":
+            return _HELP_TEXT
+
+        if command == "/reset":
+            self._sessions.rotate_conversation(session)
+            return "🔄 Контекст разговора очищен — начинаем с чистого листа."
+
+        if command == "/restaurant":
+            if len(parts) == 1:
+                if session.restaurant_id:
+                    name = self._restaurant_name(session.restaurant_id)
+                    return f"Текущая привязка: {session.restaurant_id} — {name}."
+                return (
+                    "Ресторан не привязан. Отправьте: /restaurant R-001\n"
+                    "Доступные: " + ", ".join(self._restaurant_service.list_restaurants())
+                )
+            restaurant_id = parts[1].upper()
+            try:
+                metrics = self._restaurant_service.get_metrics(restaurant_id)
+            except RestaurantNotFoundError:
+                return (
+                    f"Ресторан '{parts[1]}' не найден. Доступные: "
+                    + ", ".join(self._restaurant_service.list_restaurants())
+                )
+            self._sessions.bind_restaurant(session, restaurant_id)
+            return (
+                f"✅ Контекст привязан: {restaurant_id} — {metrics.name} ({metrics.city}). "
+                f"Теперь вопросы о показателях будут отвечаться по этому ресторану."
+            )
+
+        return f"Неизвестная команда {command}. Отправьте /help для списка команд."
+
+    def _restaurant_name(self, restaurant_id: str) -> str:
+        try:
+            return self._restaurant_service.get_metrics(restaurant_id).name
+        except RestaurantNotFoundError:
+            return "неизвестно"
+
     @staticmethod
     def _deliver_safe(transport, outbound) -> tuple[str, float]:
         """Send, timing the delivery; a transport fault becomes an empty id."""

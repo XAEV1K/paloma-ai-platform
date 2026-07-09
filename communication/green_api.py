@@ -67,9 +67,21 @@ class GreenApiClient:
                     chat_id, message_id or "?", len(text))
         return message_id
 
-    def receive_notification(self) -> dict[str, Any] | None:
-        """Pop the next queued notification (None when the queue is empty)."""
-        data = self._request("GET", "receiveNotification", timeout=_RECEIVE_TIMEOUT_S)
+    def receive_notification(self, receive_timeout_s: int = 20) -> dict[str, Any] | None:
+        """Pop the next queued notification (None when the queue is empty).
+
+        ``receiveTimeout`` long-polls server-side (5–60s per Green API docs),
+        so an idle listener makes ~3 requests/minute instead of hammering.
+        """
+        data = self._request(
+            "GET",
+            "receiveNotification",
+            params={"receiveTimeout": receive_timeout_s},
+            timeout=receive_timeout_s + 10.0,
+            # Observed in production: some instances answer an EMPTY queue
+            # with HTTP 404 (docs promise null). Same meaning — no messages.
+            treat_404_as_empty=True,
+        )
         return data  # {'receiptId': int, 'body': {...}} or None
 
     def delete_notification(self, receipt_id: int) -> None:
@@ -81,6 +93,52 @@ class GreenApiClient:
         data = self._request("GET", "getStateInstance")
         return str((data or {}).get("stateInstance", "unknown"))
 
+    def get_settings(self) -> dict[str, Any]:
+        """Current instance settings (webhook URL, notification toggles)."""
+        return self._request("GET", "getSettings") or {}
+
+    def set_settings(self, settings: dict[str, Any]) -> None:
+        """Update instance settings. Green API applies changes for up to ~1 min."""
+        self._request("POST", "setSettings", json=settings)
+
+    def ensure_polling_mode(self) -> str:
+        """Make the notification QUEUE usable and return a status detail.
+
+        Green API routes notifications EITHER to a custom webhook URL OR to
+        the polling queue — with a webhook configured, ``receiveNotification``
+        answers 404 ("clear webhook url for instance"). New instances often
+        ship with a webhook preset, so the platform normalises the instance
+        itself instead of sending the operator to the console:
+
+        - clears ``webhookUrl`` when one is set,
+        - enables ``incomingWebhook`` so inbound messages enter the queue.
+        """
+        settings = self.get_settings()
+        webhook_url = str(settings.get("webhookUrl") or "").strip()
+        incoming_enabled = str(settings.get("incomingWebhook") or "").lower() == "yes"
+
+        if not webhook_url and incoming_enabled:
+            return "notification queue active (no webhook, incoming enabled)"
+
+        changes: dict[str, Any] = {}
+        if webhook_url:
+            changes["webhookUrl"] = ""
+            changes["webhookUrlToken"] = ""
+        if not incoming_enabled:
+            changes["incomingWebhook"] = "yes"
+        logger.warning(
+            "Instance not in polling mode (webhookUrl=%r, incomingWebhook=%s) — "
+            "updating settings: %s",
+            webhook_url[:60],
+            settings.get("incomingWebhook"),
+            sorted(changes),
+        )
+        self.set_settings(changes)
+        return (
+            "instance settings updated (webhook cleared, incoming notifications "
+            "enabled) — Green API applies changes for up to ~1 minute"
+        )
+
     # ------------------------------------------------------------------
     # plumbing
     # ------------------------------------------------------------------
@@ -89,8 +147,10 @@ class GreenApiClient:
         method: str,
         endpoint: str,
         json: dict | None = None,
+        params: dict | None = None,
         timeout: float | None = None,
         path_has_suffix: bool = False,
+        treat_404_as_empty: bool = False,
     ) -> dict[str, Any] | None:
         # Green API path shape: /waInstance{ID}/{method}/{TOKEN}[/{suffix}]
         if path_has_suffix:
@@ -103,7 +163,11 @@ class GreenApiClient:
         last_error: Exception | None = None
         for attempt in range(1, _RETRIES + 1):
             try:
-                response = self._client.request(method, url, json=json, timeout=timeout)
+                response = self._client.request(
+                    method, url, json=json, params=params, timeout=timeout
+                )
+                if treat_404_as_empty and response.status_code == 404:
+                    return None
                 if response.status_code in (429,) or response.status_code >= 500:
                     raise GreenApiError(
                         f"Green API {safe_name}: HTTP {response.status_code}"

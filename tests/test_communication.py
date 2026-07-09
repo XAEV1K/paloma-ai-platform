@@ -104,7 +104,11 @@ def dispatcher_parts(settings: Settings, tmp_path: Path, customer_memory):
     webchat = WebChatTransport(sink=lambda message: None)
     router.register(webchat)
     dispatcher = MessageDispatcher(
-        sessions=sessions, runtime=runtime, response_builder=ResponseBuilder(), router=router
+        sessions=sessions,
+        runtime=runtime,
+        response_builder=ResponseBuilder(),
+        router=router,
+        restaurant_service=RestaurantService(CsvMetricsRepository(settings.restaurants_csv)),
     )
     return dispatcher, webchat, sessions, llm
 
@@ -163,12 +167,52 @@ def test_green_client_fails_fast_on_permanent_4xx(monkeypatch) -> None:
     assert attempts["count"] == 1, "4xx must not be retried"
 
 
-def test_green_client_empty_queue_returns_none() -> None:
-    client = GreenApiClient(
-        _green_settings(),
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, text="null")),
-    )
+def test_green_client_empty_queue_returns_none_and_long_polls() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, text="null")
+
+    client = GreenApiClient(_green_settings(), transport=httpx.MockTransport(handler))
     assert client.receive_notification() is None
+    assert seen[0].url.params.get("receiveTimeout") == "20", "server-side long-poll enabled"
+
+
+def test_ensure_polling_mode_clears_preset_webhook() -> None:
+    """Production incident: a preset webhookUrl makes receiveNotification 404."""
+    calls: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, str(request.url), request.content))
+        if "getSettings" in str(request.url):
+            return httpx.Response(
+                200, json={"webhookUrl": "https://old.example/hook", "incomingWebhook": "no"}
+            )
+        return httpx.Response(200, json={"saveSettings": True})
+
+    client = GreenApiClient(_green_settings(), transport=httpx.MockTransport(handler))
+    detail = client.ensure_polling_mode()
+
+    assert "settings updated" in detail
+    method, url, content = calls[-1]
+    assert method == "POST" and "setSettings" in url
+    payload = json.loads(content)
+    assert payload["webhookUrl"] == "" and payload["incomingWebhook"] == "yes"
+
+
+def test_ensure_polling_mode_noop_when_already_correct() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, json={"webhookUrl": "", "incomingWebhook": "yes"})
+
+    client = GreenApiClient(_green_settings(), transport=httpx.MockTransport(handler))
+    detail = client.ensure_polling_mode()
+
+    assert "queue active" in detail
+    assert all("setSettings" not in url for url in calls), "no write when already correct"
 
 
 # ---------------------------------------------------------------------------
@@ -286,8 +330,87 @@ def test_unknown_channel_is_a_config_error(dispatcher_parts) -> None:
 
 
 # ---------------------------------------------------------------------------
+# platform commands (channel-agnostic, never reach the LLM)
+# ---------------------------------------------------------------------------
+def test_restaurant_command_binds_session(dispatcher_parts) -> None:
+    """Production log: '/restaurant r-001' went to the LLM as plain text."""
+    dispatcher, webchat, sessions, llm = dispatcher_parts
+
+    report = dispatcher.dispatch(_inbound("/restaurant r-001", sender="79990000000@c.us"))
+
+    assert report.intent == "COMMAND" and report.agent == "Platform"
+    assert not llm.calls, "commands must never reach the LLM"
+    assert "Dastarkhan Lounge" in webchat.delivered[-1].text
+    session = sessions.resolve("webchat", "79990000000@c.us")
+    assert session.restaurant_id == "R-001", "lowercase id normalised and bound"
+
+    # The very next analytics question now gets business data.
+    dispatcher.dispatch(_inbound("какой средний чек моего ресторана?", sender="79990000000@c.us"))
+    _, messages = llm.calls[-1]
+    assert any("Dastarkhan Lounge" in m["content"] for m in messages)
+
+
+def test_unknown_restaurant_command_lists_options(dispatcher_parts) -> None:
+    dispatcher, webchat, _, llm = dispatcher_parts
+    dispatcher.dispatch(_inbound("/restaurant R-999"))
+    assert "не найден" in webchat.delivered[-1].text
+    assert "R-001" in webchat.delivered[-1].text
+    assert not llm.calls
+
+
+def test_reset_command_rotates_conversation(dispatcher_parts) -> None:
+    dispatcher, _, sessions, _ = dispatcher_parts
+    session_before = sessions.resolve("webchat", "77015550101@c.us")
+    old_conversation = session_before.conversation_id
+
+    dispatcher.dispatch(_inbound("/reset"))
+
+    session_after = sessions.resolve("webchat", "77015550101@c.us")
+    assert session_after.conversation_id != old_conversation
+
+
+def test_help_command(dispatcher_parts) -> None:
+    dispatcher, webchat, _, _ = dispatcher_parts
+    dispatcher.dispatch(_inbound("/help"))
+    assert "/restaurant" in webchat.delivered[-1].text
+
+
+def test_green_client_treats_404_queue_as_empty() -> None:
+    """Production log: this instance answers an empty queue with HTTP 404."""
+    client = GreenApiClient(
+        _green_settings(),
+        transport=httpx.MockTransport(lambda request: httpx.Response(404)),
+    )
+    assert client.receive_notification() is None  # not an error, not a retry storm
+
+
+# ---------------------------------------------------------------------------
 # response builder
 # ---------------------------------------------------------------------------
+def test_sources_only_when_reply_cites_them(dispatcher_parts) -> None:
+    """Production log: small-talk got a noisy document footer."""
+    from conversation.models import TurnResult
+    from rag.models import ContextPackage, RetrievalMetrics
+
+    builder = ResponseBuilder()
+    metrics = RetrievalMetrics(
+        embedding_ms=1, search_ms=1, rerank_ms=0, candidates=5, returned=2
+    )
+    context = ContextPackage(
+        query="q", chunks=[], text="ctx", sources=["faq.md"], char_count=3, metrics=metrics
+    )
+
+    def result_with(reply: str) -> TurnResult:
+        return TurnResult(
+            conversation_id="c", reply=reply, intent="SUPPORT", agent_role="support",
+            agent_display_name="Support Agent", latency_ms=1.0, context=context,
+        )
+
+    ungrounded = builder.build(_inbound("тест1"), result_with("Не понял вопрос, уточните."))
+    assert "📄" not in ungrounded.text
+
+    grounded = builder.build(_inbound("q"), result_with("Проверьте токен [S1]."))
+    assert "📄" in grounded.text and "faq.md" in grounded.text
 def test_response_builder_caps_whatsapp_length() -> None:
     from conversation.models import TurnResult
 

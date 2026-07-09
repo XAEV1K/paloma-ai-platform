@@ -91,6 +91,25 @@ class SessionManager:
         self._write_all(sessions)
         return session
 
+    def bind_restaurant(self, session: CommunicationSession, restaurant_id: str) -> None:
+        """Explicitly bind (or rebind) the session's business context."""
+        sessions = self._read_all()
+        session.restaurant_id = restaurant_id
+        sessions[f"{session.channel}:{session.address}"] = session
+        self._write_all(sessions)
+        logger.info("Session %s bound to restaurant %s", session.session_id, restaurant_id)
+
+    def rotate_conversation(self, session: CommunicationSession) -> None:
+        """Start a fresh conversation for the same customer (context reset)."""
+        sessions = self._read_all()
+        session.conversation_id = f"conv-{uuid.uuid4().hex[:10]}"
+        session.active_agent = None
+        sessions[f"{session.channel}:{session.address}"] = session
+        self._write_all(sessions)
+        logger.info(
+            "Session %s reset to conversation %s", session.session_id, session.conversation_id
+        )
+
     def record_turn(self, session: CommunicationSession, active_agent: str) -> None:
         """Update activity/agent after a processed message."""
         sessions = self._read_all()

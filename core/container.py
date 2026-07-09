@@ -329,6 +329,7 @@ class Container:
             runtime=conversation_runtime,
             response_builder=ResponseBuilder(),
             router=channel_router,
+            restaurant_service=restaurant_service,
         )
 
         # --- Health Monitor (glue lives in the composition root) --------------

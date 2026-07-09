@@ -33,7 +33,15 @@ class ResponseBuilder:
         policy = _POLICIES.get(inbound.channel, _DEFAULT_POLICY)
         text = result.reply.strip()
 
-        if policy.include_sources and result.context and result.context.sources:
+        # Cite sources only when the reply actually grounded itself in them
+        # ([S1]-style markers) — a small-talk answer with a document footer
+        # reads as noise, not credibility.
+        if (
+            policy.include_sources
+            and result.context
+            and result.context.sources
+            and "[S" in text
+        ):
             text += "\n\n📄 " + " · ".join(result.context.sources[:3])
 
         if len(text) > policy.max_chars:

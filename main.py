@@ -316,16 +316,27 @@ def _run_whatsapp_listener(container: Container) -> int:
     if state != "authorized":
         logger.error("Instance is not authorized — scan the QR code in the Green API console.")
         return 1
+
+    # Green API routes notifications EITHER to a webhook OR to the polling
+    # queue; a preset webhook makes receiveNotification answer 404. The
+    # platform normalises the instance itself (clear webhook, enable
+    # incoming notifications) instead of sending the operator to the console.
+    print(f"  Polling mode: {client.ensure_polling_mode()}")
     print("  Listening for WhatsApp messages (Ctrl+C to stop)...\n")
 
     processed = 0
+    consecutive_errors = 0
     try:
         while True:
             try:
                 notification = client.receive_notification()
+                consecutive_errors = 0
             except GreenApiError as exc:
-                logger.error("Notification poll failed: %s — retrying", exc)
-                time_module.sleep(settings.whatsapp_poll_seconds * 2)
+                consecutive_errors += 1
+                # Exponential backoff, capped — never hammer a sick API.
+                delay = min(settings.whatsapp_poll_seconds * (2 ** min(consecutive_errors, 4)), 60)
+                logger.error("Notification poll failed: %s — retrying in %.0fs", exc, delay)
+                time_module.sleep(delay)
                 continue
             if notification is None:
                 time_module.sleep(settings.whatsapp_poll_seconds)
