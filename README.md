@@ -64,6 +64,51 @@ status board:
   (knowledge index, embeddings, retrieval, stores, CRM connector, voice,
   LLM routing) and renders the OK/DEGRADED/FAIL board.
 
+## Communication Platform
+
+WhatsApp is **one transport of a corporate communication layer**
+(`communication/`), not a bot:
+
+```
+WhatsApp (Green API)   WebChat   Voice   (Telegram / Email — adapter files)
+        └────────────────┴─────────┴───────────────┘
+                  TransportPort adapters (transport only)
+                            │
+                    MessageDispatcher ── per-message ExecutionContext
+                            │              + runtime timeline
+                    SessionManager ── address → conversation,
+                            │          CRM-fed restaurant binding
+                  Conversation Runtime (intent → memory → RAG → LLM)
+                            │
+                    ResponseBuilder (per-channel formatting)
+                            │
+                    Transport.send ──► customer
+```
+
+- **GreenApiClient** (`communication/green_api.py`): pure HTTP — retries
+  with exponential backoff on transient faults, fail-fast on 4xx, timeouts,
+  token-safe logging. Polling mode (`ReceiveNotification`) runs from any
+  machine without a public URL; webhook payloads parse through the same
+  adapter for a future FastAPI receiver.
+- **Sessions are independent** per `(channel, address)`: conversation id,
+  restaurant binding, active AI service, last activity. Idle sessions
+  rotate to a fresh conversation; a phone number known to Customer Memory
+  (CRM sync) auto-binds to its restaurant — a customer asks "what's my
+  average ticket?" and the platform already knows which venue is theirs.
+- **No message is ever ghosted**: a failed turn sends a polite fallback,
+  a failed delivery is reported — the listener loop never dies.
+- **Per-message runtime timeline**:
+
+```
+09:14:01  whatsapp message received → intent SUPPORT (Support Agent)
+          → retrieval 15ms · 5 chunks → LLM 3469ms → response 499 chars
+          → delivered 240ms (id 3EB0...) → total 3.7s
+```
+
+Live listener: `python main.py --whatsapp` (requires `GREEN_API_INSTANCE_ID`
++ `GREEN_API_TOKEN` in `.env`). Health board shows `Green API / WhatsApp`
+instance state and registered channels.
+
 ## Plugin SDK
 
 A third-party capability is one file in `plugins/`:

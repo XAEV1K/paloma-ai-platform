@@ -45,6 +45,7 @@ class PlatformRuntime:
         scheduler: Scheduler,
         event_bus: EventBus,
         voice_mode: str,
+        channels: list[str] | None = None,
     ) -> None:
         self._memory_fabric = memory_fabric
         self._crm_sync = crm_sync
@@ -52,6 +53,7 @@ class PlatformRuntime:
         self._scheduler = scheduler
         self._event_bus = event_bus
         self._voice_mode = voice_mode
+        self._channels = channels or []
 
     def boot(self) -> BootReport:
         """Connect every subsystem and produce the boot narrative."""
@@ -72,6 +74,8 @@ class PlatformRuntime:
             )
         )
         steps.append(("Voice ready", f"{self._voice_mode} adapters · barge-in enabled"))
+        channel_names = [*self._channels, "voice"]
+        steps.append(("Channels online", " · ".join(channel_names)))
         jobs = self._scheduler.jobs
         steps.append(("Scheduler armed", f"{len(jobs)} job(s): "
                       + ", ".join(job.name for job in jobs)))

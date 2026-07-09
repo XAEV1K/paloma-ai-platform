@@ -15,15 +15,17 @@ implements the same two methods.
 from crm_sync.connector import CrmConnectorPort, SimulatedBitrixConnector
 from crm_sync.models import CrmContact, CrmDeal, NormalizedCrmEvent
 from crm_sync.normalizer import BitrixNormalizer
-from crm_sync.service import CrmSyncReport, CrmSyncService
+
+# NOTE: CrmSyncService is intentionally NOT re-exported here. The service
+# depends on services.customer_memory, which itself uses crm_sync.models —
+# re-exporting it from the package __init__ would close an import cycle.
+# Import it explicitly: ``from crm_sync.service import CrmSyncService``.
 
 __all__ = [
     "BitrixNormalizer",
     "CrmConnectorPort",
     "CrmContact",
     "CrmDeal",
-    "CrmSyncReport",
-    "CrmSyncService",
     "NormalizedCrmEvent",
     "SimulatedBitrixConnector",
 ]

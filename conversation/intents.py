@@ -55,7 +55,9 @@ _RULES: tuple[tuple[Intent, tuple[str, ...]], ...] = (
         (
             "выручка", "аналитик", "метрик", "retention", "продажи", "показатели",
             "roi", "окупаемость", "analyz", "analyse", "revenue", "metrics",
-            "performance", "отчет", "отчёт", "report",
+            "performance", "отчет", "отчёт", "report", "средний чек",
+            "average ticket", "ltv", "заказов в месяц", "orders per month",
+            "моего ресторана", "my restaurant",
         ),
     ),
     (

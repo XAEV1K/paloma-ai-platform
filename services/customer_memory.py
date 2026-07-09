@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,11 @@ from core.logging import get_logger
 from crm_sync.models import CrmContact, CrmDeal
 
 logger = get_logger("services.customer_memory")
+
+
+def _digits_tail(value: str, length: int = 10) -> str:
+    digits = "".join(re.findall(r"\d", value))
+    return digits[-length:] if len(digits) >= length else digits
 
 
 class CustomerRecord(BaseModel):
@@ -65,6 +71,20 @@ class CustomerMemoryService:
 
     def get(self, external_id: str) -> CustomerRecord | None:
         return self._read_all().get(external_id)
+
+    def find_by_phone(self, phone: str) -> CustomerRecord | None:
+        """Match a customer by phone, tolerant to formatting and prefixes.
+
+        Comparison is on the trailing 10 digits, which survives '+7 701...',
+        '87 01...' and WhatsApp chat-id forms like '77015550101@c.us'.
+        """
+        needle = _digits_tail(phone)
+        if not needle:
+            return None
+        for record in self._read_all().values():
+            if record.phone and _digits_tail(record.phone) == needle:
+                return record
+        return None
 
     def count(self) -> int:
         return len(self._read_all())

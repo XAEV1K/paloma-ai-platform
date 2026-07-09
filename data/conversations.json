@@ -178,5 +178,141 @@
       }
     ],
     "started_at": "2026-07-08T13:54:37.383512Z"
+  },
+  "chat-3b94e3ec": {
+    "conversation_id": "chat-3b94e3ec",
+    "channel": "chat",
+    "restaurant_id": "id",
+    "turns": [
+      {
+        "role": "user",
+        "content": "006",
+        "at": "2026-07-08T18:52:42.929771Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Мен түсінбедім. Сұрағыңызды нақтылап берсеңіз, көмектесуге тырысамын.",
+        "at": "2026-07-08T18:52:42.929771Z",
+        "agent_role": "support",
+        "interrupted": false
+      },
+      {
+        "role": "user",
+        "content": "Сколько стоит подключить кухонный экран KDS и что в него входит?",
+        "at": "2026-07-08T18:54:10.028366Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Подключение кухонного экрана KDS стоит 120,000 KZT за установку и 18,000 KZT в месяц за каждую локацию. В систему входит замена бумажных заказов на цифровые экраны, маршрутизация заказов по станциям (гриль, холодные закуски, десерты), таймеры приготовления для каждого блюда и аналитика времени приготовления по блюдам и временным интервалам ([S4], [S2]). \n\nЕсли вас интересует более подробная информация или демонстрация, дайте знать!",
+        "at": "2026-07-08T18:54:10.028366Z",
+        "agent_role": "sales",
+        "interrupted": false
+      },
+      {
+        "role": "user",
+        "content": "exit",
+        "at": "2026-07-08T18:55:13.405580Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Сізді қалай көмектесе алатынымды айтыңыз. Егер сұрағыңыз болмаса, мені шақырсаңыз, мен мұнда боламын.",
+        "at": "2026-07-08T18:55:13.405580Z",
+        "agent_role": "support",
+        "interrupted": false
+      }
+    ],
+    "started_at": "2026-07-08T18:52:39.117877Z"
+  },
+  "call-5377c9ea": {
+    "conversation_id": "call-5377c9ea",
+    "channel": "api",
+    "restaurant_id": null,
+    "turns": [
+      {
+        "role": "user",
+        "content": "Hi! Delivery orders are not showing up in our kitchen queue.",
+        "at": "2026-07-08T18:55:42.520313Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Let's troubleshoot this issue step by step. First, please check the aggregator connection status in your Settings under Integrations. If you see a red badge, it means the marketplace token has expired and needs re-authorisation. \n\nOnce you've checked that, let me know what you find.",
+        "at": "2026-07-08T18:55:42.520313Z",
+        "agent_role": "support",
+        "interrupted": false
+      },
+      {
+        "role": "user",
+        "content": "Wait, actually — it says the marketplace token expired, how do I fix that?",
+        "at": "2026-07-08T18:55:44.866222Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "To fix the expired marketplace token,",
+        "at": "2026-07-08T18:55:44.866222Z",
+        "agent_role": "support",
+        "interrupted": true
+      },
+      {
+        "role": "user",
+        "content": "Got it, thanks. And what does the delivery module cost monthly?",
+        "at": "2026-07-08T18:55:45.929360Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "The Delivery module costs 18,000 KZT per month per location ([S2]). If you need further assistance or want to discuss a pilot, let me know!",
+        "at": "2026-07-08T18:55:45.929360Z",
+        "agent_role": "sales",
+        "interrupted": false
+      }
+    ],
+    "started_at": "2026-07-08T18:55:39.879542Z"
+  },
+  "conv-ce81028f69": {
+    "conversation_id": "conv-ce81028f69",
+    "channel": "webchat",
+    "restaurant_id": "R-001",
+    "turns": [
+      {
+        "role": "user",
+        "content": "Почему у меня не печатаются чеки?",
+        "at": "2026-07-09T03:09:52.412861Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Скорее всего, проблема связана с настройками принтера или соединением. Пожалуйста, проверьте следующее:\n\n1. Убедитесь, что принтер включен и подключен к сети.\n2. Проверьте, установлен ли правильный драйвер принтера на вашем устройстве.\n3. Убедитесь, что в настройках Paloma365 выбран правильный принтер для печати чеков.\n4. Проверьте наличие бумаги в принтере.\n\nЕсли проблема не решится, дайте знать, я могу передать запрос на поддержку.",
+        "at": "2026-07-09T03:09:52.412861Z",
+        "agent_role": "support",
+        "interrupted": false
+      },
+      {
+        "role": "user",
+        "content": "Какой средний чек моего ресторана?",
+        "at": "2026-07-09T03:09:56.401145Z",
+        "agent_role": null,
+        "interrupted": false
+      },
+      {
+        "role": "assistant",
+        "content": "Средний чек вашего ресторана Dastarkhan Lounge — **4200.0 тенге**.",
+        "at": "2026-07-09T03:09:56.401145Z",
+        "agent_role": "architect",
+        "interrupted": false
+      }
+    ],
+    "started_at": "2026-07-09T03:09:48.934764Z"
   }
 }

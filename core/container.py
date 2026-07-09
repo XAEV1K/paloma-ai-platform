@@ -23,6 +23,11 @@ from core.health import DegradedError, HealthMonitor
 from core.logging import get_logger
 from core.runtime import PlatformRuntime
 from channels.local_api import LocalApiChannel
+from communication.channels.webchat import WebChatTransport
+from communication.dispatcher import MessageDispatcher
+from communication.response_builder import ResponseBuilder
+from communication.router import ChannelRouter
+from communication.session import SessionManager
 from crm_sync.connector import SimulatedBitrixConnector
 from crm_sync.normalizer import BitrixNormalizer
 from crm_sync.service import CrmSyncService
@@ -104,6 +109,10 @@ class Container:
     scheduler: Scheduler
     health_monitor: HealthMonitor
     platform_runtime: PlatformRuntime
+    # Communication platform
+    channel_router: ChannelRouter
+    session_manager: SessionManager
+    dispatcher: MessageDispatcher
 
     @classmethod
     def build(cls, settings: Settings) -> "Container":
@@ -253,6 +262,7 @@ class Container:
             context_builder=context_builder,
             restaurant_service=restaurant_service,
             event_bus=event_bus,
+            business_memory=memory_service,
         )
 
         # --- Voice Platform (voice is just another channel) -------------------
@@ -275,6 +285,21 @@ class Container:
         )
         voice_gateway = VoiceGateway(voice_pipeline)
 
+        # --- Communication platform (WhatsApp is just one transport) ----------
+        channel_router = ChannelRouter()
+        channel_router.register(WebChatTransport())
+        whatsapp_transport = None
+        if settings.whatsapp_configured:
+            from communication.channels.whatsapp import WhatsAppTransport
+            from communication.green_api import GreenApiClient
+
+            whatsapp_transport = WhatsAppTransport(GreenApiClient(settings))
+            channel_router.register(whatsapp_transport)
+            logger.info("WhatsApp channel registered (Green API instance %s)",
+                        settings.green_api_instance_id)
+        else:
+            logger.info("WhatsApp channel not configured (set GREEN_API_* in .env)")
+
         # --- AI Runtime: capabilities, CRM sync, memory fabric ----------------
         capabilities = CapabilityRegistry(tools)
         customer_memory = CustomerMemoryService(settings.customers_path)
@@ -290,6 +315,20 @@ class Container:
             business_memory=memory_service,
             restaurant_service=restaurant_service,
             customer_memory=customer_memory,
+        )
+
+        # Sessions bind channel addresses to conversations; Customer Memory
+        # (CRM-fed) lets a known phone number auto-bind to its restaurant.
+        session_manager = SessionManager(
+            store_path=settings.comm_sessions_path,
+            customer_memory=customer_memory,
+            idle_minutes=settings.session_idle_minutes,
+        )
+        dispatcher = MessageDispatcher(
+            sessions=session_manager,
+            runtime=conversation_runtime,
+            response_builder=ResponseBuilder(),
+            router=channel_router,
         )
 
         # --- Health Monitor (glue lives in the composition root) --------------
@@ -333,6 +372,19 @@ class Container:
         )
         health_monitor.register("LLM Routing", _llm_probe)
 
+        def _whatsapp_probe() -> str:
+            if whatsapp_transport is None:
+                raise DegradedError("not configured (set GREEN_API_* in .env)")
+            return whatsapp_transport.verify()  # instance state via Green API
+
+        def _channels_probe() -> str:
+            names = channel_router.channels()
+            return f"{len(names)} channel(s): {', '.join(names)} · " \
+                   f"{session_manager.count()} session(s)"
+
+        health_monitor.register("Green API / WhatsApp", _whatsapp_probe)
+        health_monitor.register("Communication Channels", _channels_probe)
+
         # --- Scheduler: the platform heartbeat ---------------------------------
         scheduler = Scheduler(event_bus)
         for job in build_platform_jobs(
@@ -352,6 +404,7 @@ class Container:
             scheduler=scheduler,
             event_bus=event_bus,
             voice_mode=settings.voice_provider,
+            channels=channel_router.channels(),
         )
 
         logger.info("Container ready")
@@ -378,4 +431,7 @@ class Container:
             scheduler=scheduler,
             health_monitor=health_monitor,
             platform_runtime=platform_runtime,
+            channel_router=channel_router,
+            session_manager=session_manager,
+            dispatcher=dispatcher,
         )

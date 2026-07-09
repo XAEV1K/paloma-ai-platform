@@ -97,6 +97,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Scripted voice call through the full pipeline, including barge-in interruption.",
     )
     parser.add_argument(
+        "--whatsapp",
+        action="store_true",
+        help="Start the live WhatsApp listener (Green API polling); Ctrl+C to stop.",
+    )
+    parser.add_argument(
         "--status",
         action="store_true",
         help="Boot the AI Runtime and show the platform status board (health, memory, capabilities).",
@@ -130,11 +135,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args.voice_demo,
         args.status,
         args.maintenance,
+        args.whatsapp,
     )
     if not any(modes):
         parser.error(
             "choose one of: --restaurant-id ID, --demo, --chat, --ask QUESTION, "
-            "--ingest, --voice-demo, --status, --maintenance, --list-restaurants"
+            "--whatsapp, --ingest, --voice-demo, --status, --maintenance, "
+            "--list-restaurants"
         )
     return args
 
@@ -278,6 +285,64 @@ def _run_maintenance(container: Container) -> int:
     return 0 if report.failed == 0 else 1
 
 
+def _run_whatsapp_listener(container: Container) -> int:
+    """Live WhatsApp channel: poll Green API, dispatch, reply, repeat.
+
+    Polling (ReceiveNotification/DeleteNotification) works from any
+    machine without a public webhook URL; a FastAPI webhook receiver
+    would feed the exact same adapter + dispatcher.
+    """
+    import time as time_module
+
+    from communication.green_api import GreenApiClient, GreenApiError
+    from presentation.status import render_boot
+
+    settings = container.settings
+    if not settings.whatsapp_configured:
+        logger.error(
+            "WhatsApp is not configured: set GREEN_API_INSTANCE_ID and "
+            "GREEN_API_TOKEN in .env (GREEN_API_URL if not the default)."
+        )
+        return 1
+    container.llm_router.validate()
+
+    boot = container.platform_runtime.boot()
+    print(render_boot(boot.steps, boot.boot_ms))
+
+    client = GreenApiClient(settings)
+    whatsapp = container.channel_router.resolve("whatsapp")
+    state = client.get_state_instance()
+    print(f"\n  Green API instance state: {state}")
+    if state != "authorized":
+        logger.error("Instance is not authorized — scan the QR code in the Green API console.")
+        return 1
+    print("  Listening for WhatsApp messages (Ctrl+C to stop)...\n")
+
+    processed = 0
+    try:
+        while True:
+            try:
+                notification = client.receive_notification()
+            except GreenApiError as exc:
+                logger.error("Notification poll failed: %s — retrying", exc)
+                time_module.sleep(settings.whatsapp_poll_seconds * 2)
+                continue
+            if notification is None:
+                time_module.sleep(settings.whatsapp_poll_seconds)
+                continue
+
+            receipt_id = int(notification.get("receiptId", 0))
+            inbound = whatsapp.parse_notification(notification.get("body") or {})
+            if inbound is not None:
+                report = container.dispatcher.dispatch(inbound)
+                processed += 1
+                print(f"  {report.timeline()}")
+            client.delete_notification(receipt_id)
+    except KeyboardInterrupt:
+        print(f"\n  Listener stopped. {processed} message(s) processed this session.")
+        return 0
+
+
 def _print_failure(message: str) -> None:
     print()
     print("─" * 60)
@@ -322,6 +387,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_status(container)
         if args.maintenance:
             return _run_maintenance(container)
+        if args.whatsapp:
+            return _run_whatsapp_listener(container)
         if args.chat:
             from channels.chat_cli import ChatCliChannel
             from presentation.status import render_boot

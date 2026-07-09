@@ -194,6 +194,9 @@ def test_boot_narrative_covers_every_subsystem(container: Container) -> None:
         "Memory fabric online",
         "AI services registered",
         "Voice ready",
+        "Channels online",
         "Scheduler armed",
     ]
+    channels_detail = dict(boot.steps)["Channels online"]
+    assert "webchat" in channels_detail and "voice" in channels_detail
     assert ready and ready[0].services == ["support", "sales", "analyst", "technical"]

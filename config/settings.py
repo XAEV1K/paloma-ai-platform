@@ -130,6 +130,30 @@ class Settings(BaseSettings):
     rag_hybrid: bool = Field(default=True, description="Fuse vector + keyword search (RRF).")
     rag_context_char_budget: int = Field(default=4000, ge=500)
 
+    # --- Communication platform (WhatsApp via Green API) -----------------------
+    green_api_url: str = Field(
+        default="https://api.green-api.com",
+        description="Green API base URL (from your instance console).",
+    )
+    green_api_instance_id: str | None = Field(
+        default=None, description="Green API idInstance."
+    )
+    green_api_token: str | None = Field(
+        default=None, description="Green API apiTokenInstance (secret)."
+    )
+    whatsapp_poll_seconds: float = Field(
+        default=2.0, gt=0,
+        description="Pause between Green API ReceiveNotification polls when idle.",
+    )
+    session_idle_minutes: int = Field(
+        default=240, ge=1,
+        description="A communication session starts a fresh conversation after this idle gap.",
+    )
+
+    @property
+    def whatsapp_configured(self) -> bool:
+        return bool(self.green_api_instance_id and self.green_api_token)
+
     # --- Voice -----------------------------------------------------------------
     voice_provider: Literal["simulated", "openai"] = Field(
         default="simulated",
@@ -233,6 +257,10 @@ class Settings(BaseSettings):
     @property
     def customers_path(self) -> Path:
         return self.data_dir / "customers.json"
+
+    @property
+    def comm_sessions_path(self) -> Path:
+        return self.data_dir / "comm_sessions.json"
 
     @property
     def sqlite_db(self) -> Path:

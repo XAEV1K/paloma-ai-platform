@@ -45,6 +45,16 @@
           "LOW_DELIVERY_SHARE",
           "SLOW_KITCHEN"
         ]
+      },
+      {
+        "analyzed_at": "2026-07-08T18:58:00.652355Z",
+        "headline": "Dastarkhan Lounge: near-absent delivery channel and weak guest retention compounded by kitchen overload and slow ticket times",
+        "problem_categories": [
+          "LOW_DELIVERY_SHARE",
+          "LOW_RETENTION",
+          "SLOW_KITCHEN",
+          "KITCHEN_OVERLOAD"
+        ]
       }
     ],
     "offers": [
@@ -100,6 +110,18 @@
       {
         "offer_id": "OF-4F589439",
         "offered_at": "2026-07-06T17:50:31.337306Z",
+        "module_codes": [
+          "DELIVERY",
+          "KITCHEN_DISPLAY"
+        ],
+        "roi_pct": 299.12,
+        "outcome": "SENT",
+        "rejected_modules": [],
+        "outcome_comment": ""
+      },
+      {
+        "offer_id": "OF-9A17BEDE",
+        "offered_at": "2026-07-08T18:57:57.635651Z",
         "module_codes": [
           "DELIVERY",
           "KITCHEN_DISPLAY"

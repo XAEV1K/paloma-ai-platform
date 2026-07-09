@@ -1,0 +1,13 @@
+{
+  "webchat:77015550101@c.us": {
+    "session_id": "cs-0729286fe6",
+    "channel": "webchat",
+    "address": "77015550101@c.us",
+    "conversation_id": "conv-ce81028f69",
+    "restaurant_id": "R-001",
+    "active_agent": "Business Analyst",
+    "created_at": "2026-07-09T03:09:48.933814Z",
+    "last_activity": "2026-07-09T03:09:56.402165Z",
+    "messages": 2
+  }
+}

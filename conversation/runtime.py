@@ -38,6 +38,7 @@ from events.bus import EventBus
 from events.events import ConversationTurnCompleted
 from rag.context_builder import ContextBuilder
 from rag.models import ContextPackage
+from services.memory_service import BusinessMemoryService
 from services.restaurant_service import RestaurantService
 
 logger = get_logger("conversation.runtime")
@@ -67,6 +68,7 @@ class ConversationRuntime:
         context_builder: ContextBuilder | None,
         restaurant_service: RestaurantService,
         event_bus: EventBus,
+        business_memory: BusinessMemoryService | None = None,
         history_window: int = 8,
     ) -> None:
         self._store = store
@@ -77,6 +79,7 @@ class ConversationRuntime:
         self._context_builder = context_builder
         self._restaurant_service = restaurant_service
         self._event_bus = event_bus
+        self._business_memory = business_memory
         self._history_window = history_window
 
     # ------------------------------------------------------------------
@@ -194,10 +197,44 @@ class ConversationRuntime:
             metrics = self._restaurant_service.get_metrics(restaurant_id)
         except PalomaError:
             return ""
-        return (
+        block = (
             "Business context (deterministic data — quote, never recompute): "
             + metrics.model_dump_json()
         )
+        history_note = self._history_note(restaurant_id)
+        if history_note:
+            block += "\n" + history_note
+        return block
+
+    def _history_note(self, restaurant_id: str) -> str:
+        """Business-memory summary: prior offers and explicit rejections.
+
+        The runtime is obligated to know what this client already declined —
+        an AI service must never re-pitch a rejected module as if the
+        conversation started from zero.
+        """
+        if self._business_memory is None:
+            return ""
+        try:
+            history = self._business_memory.get_history(restaurant_id)
+        except PalomaError:
+            return ""
+        if not history.offers:
+            return ""
+        rejected = sorted(code.value for code in history.previously_rejected_modules)
+        last = history.last_offer
+        parts = [f"Engagement history: {len(history.offers)} prior offer(s)."]
+        if last is not None:
+            parts.append(
+                f"Latest offer {last.offer_id}: {', '.join(c.value for c in last.module_codes)} "
+                f"({last.outcome.value})."
+            )
+        if rejected:
+            parts.append(
+                f"Client previously REJECTED: {', '.join(rejected)} — do not re-pitch "
+                f"these without acknowledging the rejection and citing new evidence."
+            )
+        return " ".join(parts)
 
     def _stream_reply(
         self, role, messages: list[Message], on_token: TokenCallback | None
